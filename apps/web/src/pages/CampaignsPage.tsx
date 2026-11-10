@@ -1,0 +1,65 @@
+import { useEffect, useState } from "react";
+import { CheckCircle2, Clock3, MessageSquareText, UserCheck } from "lucide-react";
+import { api, formatDate, formatNumber } from "../lib/api";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Panel } from "../components/ui/Panel";
+import { ErrorState, LoadingState } from "../components/ui/Feedback";
+
+type Action = {
+  action_id: string; usuario_key: number; status: string; offer_title: string;
+  personalized_message: string; created_at: string; approved_at?: string;
+  contacted_at?: string; reactivated_at?: string;
+};
+type Recommendation = { usuarioKey: number; name: string; customerCode: string };
+
+const labels: Record<string, string> = {
+  proposed: "Pendiente", approved: "Aprobada", contacted: "Contactado",
+  responded: "Respondio", reactivated: "Reactivado", dismissed: "Descartada",
+};
+const styles: Record<string, string> = {
+  proposed: "bg-[#f5efdf] text-[#96713e]", approved: "bg-[#e8edf1] text-[#5d7681]",
+  contacted: "bg-[#e7efe8] text-[#416c52]", reactivated: "bg-[#e7efe8] text-[#416c52]",
+  responded: "bg-[#e8edf1] text-[#5d7681]", dismissed: "bg-[#f1eeec] text-[#7d7772]",
+};
+
+export function CampaignsPage() {
+  const [actions, setActions] = useState<Action[]>([]);
+  const [customers, setCustomers] = useState<Recommendation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const data = await api<{ actions: Action[]; recommendations: Recommendation[] }>("/agent/recommendations");
+      setActions(data.actions); setCustomers(data.recommendations);
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo cargar el seguimiento."); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
+
+  const names = new Map(customers.map((item) => [String(item.usuarioKey), item]));
+  const contacted = actions.filter((item) => ["contacted", "responded", "reactivated"].includes(item.status)).length;
+  const reactivated = actions.filter((item) => item.status === "reactivated").length;
+
+  return <>
+    <PageHeader eyebrow="Customer success" title="De la recomendacion al regreso." description="Registra la aprobacion, el contacto y la reactivacion. Seren AI no envia mensajes automaticamente en esta etapa." />
+    <div className="mb-5 grid gap-4 sm:grid-cols-3">
+      <div className="surface-card p-5"><Clock3 className="text-[#96713e]" size={18} /><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-muted">Acciones registradas</p><p className="mt-1 font-display text-2xl font-bold text-ink">{formatNumber(actions.length)}</p></div>
+      <div className="surface-card p-5"><MessageSquareText className="text-[#5d7681]" size={18} /><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-muted">Contactos registrados</p><p className="mt-1 font-display text-2xl font-bold text-ink">{formatNumber(contacted)}</p></div>
+      <div className="surface-card p-5"><UserCheck className="text-forest" size={18} /><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-muted">Clientes reactivados</p><p className="mt-1 font-display text-2xl font-bold text-ink">{formatNumber(reactivated)}</p></div>
+    </div>
+    <Panel title="Seguimiento de acciones" subtitle="Historial operativo del agente">
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} onRetry={() => void load()} />}
+      {!loading && !error && !actions.length && <div className="py-12 text-center"><CheckCircle2 className="mx-auto text-forest" size={24} /><p className="mt-3 text-sm font-semibold text-ink">Aun no hay acciones registradas</p><p className="mt-1 text-xs text-muted">Ejecuta el analisis en Agente Seren para generar propuestas.</p></div>}
+      {!loading && !error && actions.length > 0 && <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Accion recomendada</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
+        {actions.map((action) => {
+          const person = names.get(String(action.usuario_key));
+          const updated = action.reactivated_at ?? action.contacted_at ?? action.approved_at ?? action.created_at;
+          return <tr key={action.action_id}><td><div className="font-semibold text-ink">{person?.name ?? "Customer #" + action.usuario_key}</div><div className="text-[10px] text-muted">{person?.customerCode ?? ""}</div></td><td>{action.offer_title}</td><td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td><td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td></tr>;
+        })}
+      </tbody></table></div>}
+    </Panel>
+  </>;
+}

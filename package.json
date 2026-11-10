@@ -1,0 +1,24 @@
+{
+  "name": "seren-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agente inteligente de retencion proactiva para spas",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @seren-ai/api",
+    "dev:web": "npm run dev --workspace @seren-ai/web",
+    "build": "npm run build --workspace @seren-ai/api && npm run build --workspace @seren-ai/web",
+    "test": "npm run test --workspace @seren-ai/api",
+    "start": "npm run start --workspace @seren-ai/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
