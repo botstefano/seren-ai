@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { loadAnalytics, createRecommendations, invalidateAnalyticsCache } from "../services/analytics.js";
-import { enrichRecommendations } from "../services/mistral.js";
+import { enrichRecommendations } from "../services/groq.js";
 import { env } from "../config/env.js";
 
 const router = Router();
@@ -13,8 +13,9 @@ router.get("/health", async (_req, res) => {
     status: "ok",
     service: "seren-ai-api",
     databaseConfigured: Boolean(supabase),
-    mistralConfigured: Boolean(env.mistralApiKey),
-    mistralModel: env.mistralModel,
+    aiProviderConfigured: Boolean(env.groqApiKey),
+    aiProvider: "Groq",
+    aiModel: env.groqModel,
     timestamp: new Date().toISOString(),
   });
 });
@@ -155,7 +156,7 @@ router.get("/agent/recommendations", async (_req, res, next) => {
         aiGenerated: Boolean(action.ai_generated),
       } : { ...item, aiGenerated: false };
     });
-    res.json({ migrationReady: true, recommendations: persistedRecommendations, actions: actions ?? [], aiProvider: { configured: Boolean(env.mistralApiKey), model: env.mistralModel } });
+    res.json({ migrationReady: true, recommendations: persistedRecommendations, actions: actions ?? [], aiProvider: { configured: Boolean(env.groqApiKey), model: env.groqModel } });
   } catch (error) {
     next(error);
   }
