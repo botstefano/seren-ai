@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ClipboardCopy, LoaderCircle, MessageCircle, RefreshCw, Sparkles, ThumbsUp, UserCheck } from "lucide-react";
+import { Check, ClipboardCopy, MessageCircle, RefreshCw, Sparkles, ThumbsUp, UserCheck } from "lucide-react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
