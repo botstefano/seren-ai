@@ -144,10 +144,11 @@ router.get("/agent/recommendations", async (_req, res, next) => {
 });
 
 router.post("/agent/analyze", async (_req, res, next) => {
+  let runId = null;
   try {
     const data = await loadAnalytics({ force: true });
     const recommendations = createRecommendations(data.customers);
-    const runId = randomUUID();
+    runId = randomUUID();
 
     const { error: runError } = await supabase.schema("seren_ai").from("agent_runs").insert({
       run_id: runId,
@@ -190,8 +191,19 @@ router.post("/agent/analyze", async (_req, res, next) => {
     if (readError) throw readError;
 
     const recByUser = new Map(recommendations.map((item) => [String(item.usuarioKey), item]));
+    const { data: openActions, error: openActionsError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("usuario_key")
+      .in("status", ["proposed", "approved", "contacted", "responded"]);
+    if (openActionsError) throw openActionsError;
+
+    const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
     const actions = (savedAssessments ?? [])
-      .filter((assessment) => recByUser.has(String(assessment.usuario_key)))
+      .filter((assessment) =>
+        recByUser.has(String(assessment.usuario_key)) &&
+        !usersWithOpenAction.has(String(assessment.usuario_key))
+      )
       .map((assessment) => {
         const recommendation = recByUser.get(String(assessment.usuario_key));
         return {
@@ -227,6 +239,11 @@ router.post("/agent/analyze", async (_req, res, next) => {
       message: "Analisis completado. Las recomendaciones quedan pendientes de aprobacion humana.",
     });
   } catch (error) {
+    if (runId && supabase) {
+      await supabase.schema("seren_ai").from("agent_runs")
+        .update({ status: "failed", finished_at: new Date().toISOString(), error_message: String(error.message ?? error).slice(0, 2000) })
+        .eq("run_id", runId);
+    }
     next(error);
   }
 });
@@ -239,9 +256,28 @@ router.patch("/agent/actions/:actionId/status", async (req, res, next) => {
       return res.status(400).json({ message: "Estado no valido." });
     }
 
+    const { data: current, error: currentError } = await supabase.schema("seren_ai")
+      .from("reactivation_actions")
+      .select("status")
+      .eq("action_id", req.params.actionId)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current) return res.status(404).json({ message: "Accion no encontrada." });
+
+    const transitions = {
+      proposed: ["approved", "dismissed"],
+      approved: ["contacted", "dismissed"],
+      contacted: ["responded", "reactivated", "dismissed"],
+      responded: ["reactivated", "dismissed"],
+    };
+    if (!(transitions[current.status] ?? []).includes(status)) {
+      return res.status(409).json({ message: "Transicion no permitida: " + current.status + " → " + status + "." });
+    }
+
     const timestampField = {
       approved: "approved_at",
       contacted: "contacted_at",
+      responded: "responded_at",
       reactivated: "reactivated_at",
     }[status];
 
