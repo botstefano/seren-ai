@@ -5,8 +5,7 @@ const MAX_BATCH_SIZE = 20;
 
 function extractJson(content) {
   if (typeof content !== "string") throw new Error("Mistral devolvio una respuesta sin texto.");
-  const cleaned = content.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
-  return JSON.parse(cleaned);
+  return JSON.parse(content.trim());
 }
 
 async function generateBatch(items) {
