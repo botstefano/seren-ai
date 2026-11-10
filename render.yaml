@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    branch: feature/seren-ai-platform
+    branch: main
     autoDeployTrigger: checksPass
     buildCommand: npm install && npm run build --workspace=@seren-ai/api
     startCommand: npm run start --workspace=@seren-ai/api
@@ -15,7 +15,7 @@ services:
       - key: PORT
         value: "10000"
       - key: CLIENT_ORIGIN
-        value: https://seren-ai-web.onrender.com
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -35,7 +35,7 @@ services:
     staticPublishPath: apps/web/dist
     envVars:
       - key: VITE_API_URL
-        value: https://seren-ai-api.onrender.com
+        sync: false
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
