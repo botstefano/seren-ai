@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, ArrowDownRight, ArrowUpRight, Clock3, Repeat2, Sparkles, Target, Wallet } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, formatMoney, formatMonth, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
@@ -72,7 +72,7 @@ export function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={data.riskDistribution} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3} stroke="none">
-                    {data.riskDistribution.map((item) => <cell key={item.key} fill={riskColors[item.key] ?? "#a8b1aa"} />)}
+                    {data.riskDistribution.map((item) => <Cell key={item.key} fill={riskColors[item.key] ?? "#a8b1aa"} />)}
                   </Pie>
                   <Tooltip formatter={(value) => formatNumber(Number(value))} />
                 </PieChart>
