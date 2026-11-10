@@ -228,7 +228,8 @@ router.post("/agent/analyze", async (_req, res, next) => {
           favorite_product_key: recommendation.favoriteProduct?.key ?? null,
           offer_discount_pct: recommendation.offerDiscount,
           offer_title: recommendation.offerTitle,
-          personalized_message: recommendation.personalizedMessage,\n          ai_generated: Boolean(recommendation.aiGenerated),
+          personalized_message: recommendation.personalizedMessage,
+          ai_generated: Boolean(recommendation.aiGenerated),
         };
       });
 
@@ -250,7 +251,9 @@ router.post("/agent/analyze", async (_req, res, next) => {
       highRisk: data.kpis.highRisk,
       mediumRisk: data.kpis.mediumRisk,
       lowRisk: data.kpis.lowRisk,
-      recommendationsCreated: actions.length,\n      ai,\n      message: "Analisis completado. Las recomendaciones quedan pendientes de aprobacion humana.",
+      recommendationsCreated: actions.length,
+      ai,
+      message: "Analisis completado. Las recomendaciones quedan pendientes de aprobacion humana.",
     });
   } catch (error) {
     if (runId && supabase) {
