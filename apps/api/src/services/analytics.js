@@ -16,7 +16,8 @@ export async function loadAnalytics({ force = false } = {}) {
     fetchAll("oltp_origen_spa", "venta", "id_venta,id_cliente,fecha_hora,monto_bruto"),
   ]);
 
-  const insights = buildCustomerInsights({ customers, purchases, details, products });
+  const customerRows = customers.filter((item) => String(item.codigo_usuario) !== "0");
+  const insights = buildCustomerInsights({ customers: customerRows, purchases, details, products });
   const allPurchasesByClient = new Map();
   for (const sale of sales) {
     const key = String(sale.id_cliente);
@@ -28,6 +29,7 @@ export async function loadAnalytics({ force = false } = {}) {
   const highRisk = insights.filter((customer) => customer.riskLevel === "HIGH").length;
   const mediumRisk = insights.filter((customer) => customer.riskLevel === "MEDIUM").length;
   const atRisk = highRisk + mediumRisk;
+  const evaluableCustomers = insights.filter((customer) => customer.riskLevel !== "INSUFFICIENT_DATA").length;
   const grossRevenue = purchases.reduce((sum, item) => sum + Number(item.monto_bruto_compra ?? 0), 0);
   const averageTicket = purchases.length ? grossRevenue / purchases.length : 0;
   const averageFrequency = insights.length
@@ -51,13 +53,13 @@ export async function loadAnalytics({ force = false } = {}) {
     details,
     products,
     kpis: {
-      totalCustomers: customers.filter((item) => String(item.codigo_usuario) !== "0").length,
+      totalCustomers: customerRows.length,
       totalBuyers,
       recurringBuyers: recurringBuyerCount,
       repurchaseRate: totalBuyers ? (recurringBuyerCount / totalBuyers) * 100 : 0,
       averageFrequency,
       averageTicket,
-      churnRate: insights.length ? (atRisk / insights.length) * 100 : 0,
+      churnRate: evaluableCustomers ? (atRisk / evaluableCustomers) * 100 : 0,
       highRisk,
       mediumRisk,
       lowRisk: insights.filter((customer) => customer.riskLevel === "LOW").length,
