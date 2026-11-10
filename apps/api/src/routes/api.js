@@ -127,7 +127,7 @@ router.get("/agent/recommendations", async (_req, res, next) => {
     const { data: actions, error } = await supabase
       .schema("seren_ai")
       .from("reactivation_actions")
-      .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,offer_discount_pct,ai_generated,created_at,approved_at,contacted_at,reactivated_at")
+      .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,ai_explanation,offer_discount_pct,ai_generated,created_at,approved_at,contacted_at,reactivated_at")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -150,6 +150,7 @@ router.get("/agent/recommendations", async (_req, res, next) => {
         ...item,
         offerTitle: action.offer_title,
         personalizedMessage: action.personalized_message,
+        aiExplanation: action.ai_explanation ?? null,
         offerDiscount: Number(action.offer_discount_pct ?? item.offerDiscount),
         aiGenerated: Boolean(action.ai_generated),
       } : { ...item, aiGenerated: false };
@@ -232,6 +233,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
           offer_discount_pct: recommendation.offerDiscount,
           offer_title: recommendation.offerTitle,
           personalized_message: recommendation.personalizedMessage,
+          ai_explanation: recommendation.aiExplanation ?? null,
           ai_generated: Boolean(recommendation.aiGenerated),
         };
       });
