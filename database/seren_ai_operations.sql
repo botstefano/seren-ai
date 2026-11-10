@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS seren_ai.reactivation_actions (
         CHECK (offer_discount_pct BETWEEN 0 AND 30),
     offer_title VARCHAR(240) NOT NULL,
     personalized_message TEXT NOT NULL,
+    ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
     approved_at TIMESTAMPTZ,
     contacted_at TIMESTAMPTZ,
     responded_at TIMESTAMPTZ,
@@ -71,6 +72,9 @@ CREATE INDEX IF NOT EXISTS idx_reactivation_actions_status
     ON seren_ai.reactivation_actions (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reactivation_actions_user
     ON seren_ai.reactivation_actions (usuario_key, created_at DESC);
+
+ALTER TABLE seren_ai.reactivation_actions
+    ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Server-side API only. Never grant the service_role key to the browser.
 GRANT USAGE ON SCHEMA oltp_origen_spa, datamart_origen_spa, seren_ai TO service_role;
