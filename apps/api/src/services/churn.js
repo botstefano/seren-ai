@@ -55,7 +55,6 @@ export function classifyRisk(daysSinceLastPurchase, expectedIntervalDays) {
 
 export function buildCustomerInsights({ customers, purchases, details, products, now = new Date() }) {
   const purchasesByUser = new Map();
-  const detailsByProduct = new Map();
   const productByKey = new Map((products ?? []).map((product) => [String(product.producto_key), product]));
 
   for (const purchase of purchases ?? []) {
