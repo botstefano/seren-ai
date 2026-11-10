@@ -30,7 +30,7 @@ services:
   - type: web
     name: seren-ai-web
     runtime: static
-    branch: feature/seren-ai-platform
+    branch: main
     buildCommand: npm install && npm run build --workspace=@seren-ai/web
     staticPublishPath: apps/web/dist
     envVars:
