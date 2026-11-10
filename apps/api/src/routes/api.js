@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { loadAnalytics, createRecommendations, invalidateAnalyticsCache } from "../services/analytics.js";
-import { buildPersonalizedMessage } from "../services/churn.js";
+import { enrichRecommendations } from "../services/mistral.js";
 import { env } from "../config/env.js";
 
 const router = Router();
@@ -13,6 +13,8 @@ router.get("/health", async (_req, res) => {
     status: "ok",
     service: "seren-ai-api",
     databaseConfigured: Boolean(supabase),
+    mistralConfigured: Boolean(env.mistralApiKey),
+    mistralModel: env.mistralModel,
     timestamp: new Date().toISOString(),
   });
 });
@@ -125,7 +127,7 @@ router.get("/agent/recommendations", async (_req, res, next) => {
     const { data: actions, error } = await supabase
       .schema("seren_ai")
       .from("reactivation_actions")
-      .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,created_at,approved_at,contacted_at,reactivated_at")
+      .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,offer_discount_pct,ai_generated,created_at,approved_at,contacted_at,reactivated_at")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -137,7 +139,22 @@ router.get("/agent/recommendations", async (_req, res, next) => {
         migrationMessage: "Ejecuta la migracion database/seren_ai_operations.sql para habilitar el seguimiento de acciones.",
       });
     }
-    res.json({ migrationReady: true, recommendations, actions: actions ?? [] });
+    const latestActionByUser = new Map();
+    for (const action of actions ?? []) {
+      const key = String(action.usuario_key);
+      if (!latestActionByUser.has(key)) latestActionByUser.set(key, action);
+    }
+    const persistedRecommendations = recommendations.map((item) => {
+      const action = latestActionByUser.get(String(item.usuarioKey));
+      return action ? {
+        ...item,
+        offerTitle: action.offer_title,
+        personalizedMessage: action.personalized_message,
+        offerDiscount: Number(action.offer_discount_pct ?? item.offerDiscount),
+        aiGenerated: Boolean(action.ai_generated),
+      } : { ...item, aiGenerated: false };
+    });
+    res.json({ migrationReady: true, recommendations: persistedRecommendations, actions: actions ?? [], aiProvider: { configured: Boolean(env.mistralApiKey), model: env.mistralModel } });
   } catch (error) {
     next(error);
   }
@@ -147,7 +164,8 @@ router.post("/agent/analyze", async (_req, res, next) => {
   let runId = null;
   try {
     const data = await loadAnalytics({ force: true });
-    const recommendations = createRecommendations(data.customers);
+    const baseRecommendations = createRecommendations(data.customers);
+    const { recommendations, ai } = await enrichRecommendations(baseRecommendations);
     runId = randomUUID();
 
     const { error: runError } = await supabase.schema("seren_ai").from("agent_runs").insert({
@@ -214,6 +232,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
           offer_discount_pct: recommendation.offerDiscount,
           offer_title: recommendation.offerTitle,
           personalized_message: recommendation.personalizedMessage,
+          ai_generated: Boolean(recommendation.aiGenerated),
         };
       });
 
@@ -236,6 +255,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
       mediumRisk: data.kpis.mediumRisk,
       lowRisk: data.kpis.lowRisk,
       recommendationsCreated: actions.length,
+      ai,
       message: "Analisis completado. Las recomendaciones quedan pendientes de aprobacion humana.",
     });
   } catch (error) {

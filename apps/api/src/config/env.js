@@ -14,6 +14,9 @@ export const env = {
   port: Number(process.env.PORT ?? 4000),
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  mistralApiKey: process.env.MISTRAL_API_KEY ?? "",
+  mistralModel: process.env.MISTRAL_MODEL ?? "mistral-small-2603",
+  mistralMaxRecommendations: Math.min(100, Math.max(1, Number(process.env.MISTRAL_MAX_AI_RECOMMENDATIONS ?? 20))),
   clientOrigins: (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
     .split(",")
     .map((value) => value.trim())
