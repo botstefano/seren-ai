@@ -92,7 +92,8 @@ export async function enrichRecommendations(recommendations) {
       const byCode = new Map(generated.map((item) => [String(item.customerCode), item]));
       for (const original of batch) {
         const candidate = byCode.get(String(original.customerCode));
-        const aiExplanation = typeof candidate?.aiExplanation === "string" ? candidate.aiExplanation.trim() : "";\n        const offerTitle = typeof candidate?.offerTitle === "string" ? candidate.offerTitle.trim() : "";
+        const aiExplanation = typeof candidate?.aiExplanation === "string" ? candidate.aiExplanation.trim() : "";
+        const offerTitle = typeof candidate?.offerTitle === "string" ? candidate.offerTitle.trim() : "";
         const personalizedMessage = typeof candidate?.personalizedMessage === "string"
           ? candidate.personalizedMessage.trim()
           : "";
