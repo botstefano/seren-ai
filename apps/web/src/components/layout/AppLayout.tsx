@@ -84,6 +84,14 @@ export function AppLayout() {
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-forest text-xs font-bold text-white">{email.slice(0, 1).toUpperCase()}</div>
           </div>
         </header>
+        <nav className="mobile-nav lg:hidden">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => "mobile-nav-link " + (isActive ? "mobile-nav-link-active" : "")}>
+              <Icon size={15} /><span>{item.label}</span>
+            </NavLink>;
+          })}
+        </nav>
         <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-10"><Outlet /></div>
         <footer className="px-5 pb-7 text-center text-[10px] text-muted sm:px-8">Seren AI · Inteligencia de retencion proactiva · Origen Spa</footer>
       </main>
