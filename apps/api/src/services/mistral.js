@@ -96,7 +96,7 @@ export async function enrichRecommendations(recommendations) {
         const personalizedMessage = typeof candidate?.personalizedMessage === "string"
           ? candidate.personalizedMessage.trim()
           : "";
-        const mentionedDiscounts = [...(offerTitle + " " + personalizedMessage).matchAll(/(\\d+(?:[.,]\\d+)?)\\s*%/g)]
+        const mentionedDiscounts = [...(offerTitle + " " + personalizedMessage).matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)]
           .map((match) => Number(match[1].replace(",", ".")));
         const discountIsSafe = mentionedDiscounts.every((value) => value === Number(original.offerDiscount));
         if (offerTitle && personalizedMessage && discountIsSafe) {
