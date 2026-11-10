@@ -16,7 +16,7 @@ type Action = {
   action_id: string; usuario_key: number; status: string; offer_title: string;
   personalized_message: string; approved_at?: string; contacted_at?: string; reactivated_at?: string;
 };
-type AgentPayload = { migrationReady: boolean; migrationMessage?: string; recommendations: Recommendation[]; actions: Action[] };
+type AgentPayload = { migrationReady: boolean; migrationMessage?: string; recommendations: Recommendation[]; actions: Action[]; aiProvider?: { configured: boolean; model: string } };
 
 const statusLabels: Record<string, string> = {
   proposed: "Pendiente de aprobacion", approved: "Aprobada", contacted: "Contacto registrado",
@@ -72,6 +72,7 @@ export function AgentPage() {
     {error && <div className="mb-4"><ErrorState message={error} onRetry={() => void load()} /></div>}
     {loading && <LoadingState />}
     {data && !data.migrationReady && <div className="mb-5 rounded-xl border border-[#e9d8b7] bg-[#fbf6e9] px-4 py-3 text-xs leading-5 text-[#80633b]">{data.migrationMessage ?? "Ejecuta la migracion operativa para guardar las evaluaciones y acciones."}</div>}
+    {data?.aiProvider && !data.aiProvider.configured && <div className="mb-5 rounded-xl border border-[#e9d8b7] bg-[#fbf6e9] px-4 py-3 text-xs leading-5 text-[#80633b]">Mistral aun no esta configurado en el backend. Agrega MISTRAL_API_KEY en el servicio API de Render para activar la personalizacion con IA.</div>}
     {data && <>
       <div className="mb-5 flex items-start gap-3 rounded-2xl bg-[#eaf0e9] p-4">
         <div className="rounded-xl bg-white p-2 text-forest"><Sparkles size={18} /></div>
