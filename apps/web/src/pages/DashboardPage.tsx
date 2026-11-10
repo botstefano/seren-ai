@@ -43,11 +43,12 @@ export function DashboardPage() {
       {error && <ErrorState message={error} onRetry={() => void load()} />}
       {data && <>
         {!data.migrationReady && <div className="mb-5 rounded-xl border border-[#e9d8b7] bg-[#fbf6e9] px-4 py-3 text-xs leading-5 text-[#80633b]">El DataMart esta conectado. Ejecuta <b>database/seren_ai_operations.sql</b> para habilitar el seguimiento persistente del agente y las reactivaciones.</div>}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Customers activos" value={formatNumber(data.kpis.totalCustomers)} detail="Clientes con 2 o mas compras" icon={Repeat2} tone="sage" />
           <StatCard label="Tasa de recompra" value={data.kpis.repurchaseRate.toFixed(1) + "%"} detail="Customers sobre compradores" icon={Target} tone="gold" />
           <StatCard label="Frecuencia promedio" value={data.kpis.averageFrequency.toFixed(1) + "x"} detail="Compras por Customer" icon={Clock3} tone="blue" />
           <StatCard label="Ticket recurrente" value={formatMoney(data.kpis.averageTicket)} detail="Por compra recurrente" icon={Wallet} tone="clay" />
+          <StatCard label="Tasa de churn" value={data.kpis.churnRate.toFixed(1) + "%"} detail="Sobre clientes evaluables" icon={Activity} tone="clay" />
         </div>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[1.65fr_1fr]">
