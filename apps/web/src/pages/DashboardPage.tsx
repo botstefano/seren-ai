@@ -14,7 +14,7 @@ type Overview = {
   kpis: {
     totalCustomers: number; repurchaseRate: number; averageFrequency: number;
     averageTicket: number; churnRate: number; highRisk: number; mediumRisk: number;
-    lowRisk: number; pendingActions: number; reactivationRate: number;
+    lowRisk: number; pendingActions: number; reactivationRate: number; reactivatedActions: number;
   };
   monthly: { month: string; purchases: number; revenue: number }[];
   riskDistribution: { name: string; value: number; key: string }[];
