@@ -58,7 +58,7 @@ async function generateBatch(items) {
             "No cambies el nivel de riesgo ni recalcules metricas: son resultados deterministas ya calculados.",
             "El descuento maximo permitido es el descuento sugerido recibido y nunca debes aumentarlo.",
             "No afirmes que una reserva esta hecha ni que un mensaje fue enviado. La propuesta requiere aprobacion humana.",
-            "Devuelve un objeto JSON con recommendations: array de objetos con customerCode, aiExplanation, offerTitle y personalizedMessage. aiExplanation debe explicar en una o dos frases por que la demora observada merece atencion, sin diagnosticar ni recalcular el riesgo.",
+            "Devuelve un objeto JSON con recommendations: array de objetos con reference, aiExplanation, offerTitle y personalizedMessage. aiExplanation debe explicar en una o dos frases por que la demora observada merece atencion, sin diagnosticar ni recalcular el riesgo.",
             "Cada reference debe coincidir exactamente con la entrada. No incluyas texto fuera del JSON.",
           ].join(" "),
         },
