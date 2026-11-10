@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { loadAnalytics, createRecommendations, invalidateAnalyticsCache } from "../services/analytics.js";
-import { buildPersonalizedMessage } from "../services/churn.js";
 import { enrichRecommendations } from "../services/mistral.js";
 
 const router = Router();
