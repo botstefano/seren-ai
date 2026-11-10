@@ -35,3 +35,13 @@ Los umbrales son configurables mediante `CHURN_MEDIUM_MULTIPLIER` y `CHURN_HIGH_
 ## Mensajería
 
 El agente genera un mensaje y una oferta sugerida. No envía WhatsApp, SMS ni email en esta versión; el personal debe aprobar y registrar el contacto. La integración con un proveedor de mensajería se añadirá cuando se configuren credenciales y consentimiento.
+
+## Personalizacion con IA (opcional)
+
+El proveedor de inferencia es GroqCloud. En el plan Free se aplican limites de solicitudes y tokens; consulta los limites vigentes en la consola. Configura solo en el servidor:
+
+- `GROQ_API_KEY`: clave de API de GroqCloud.
+- `GROQ_MODEL`: por defecto `openai/gpt-oss-120b`.
+- `GROQ_MAX_AI_RECOMMENDATIONS`: maximo de propuestas que se envian al proveedor por analisis (por defecto 20).
+
+El motor estadistico conserva la autoridad sobre el nivel de riesgo. Groq solo genera explicaciones y borradores personalizados. Si no hay clave o el proveedor falla, se conservan las plantillas seguras. No envies nombres completos, correos, telefonos ni otros datos de contacto al proveedor.
