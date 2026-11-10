@@ -4,6 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
+        line: "#e8eae3",
         ink: "#1f302c",
         muted: "#71807a",
         canvas: "#f7f7f2",
