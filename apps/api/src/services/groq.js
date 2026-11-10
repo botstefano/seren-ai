@@ -1,6 +1,6 @@
 import { env } from "../config/env.js";
 
-const API_URL = "https://api.Groq.ai/v1/chat/completions";
+const API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_BATCH_SIZE = 20;
 
 function extractJson(content) {
@@ -33,12 +33,12 @@ async function generateBatch(items) {
                 items: {
                   type: "object",
                   properties: {
-                    customerCode: { type: "string" },
+                    reference: { type: "string" },
                     aiExplanation: { type: "string" },
                     offerTitle: { type: "string" },
                     personalizedMessage: { type: "string" }
                   },
-                  required: ["customerCode", "aiExplanation", "offerTitle", "personalizedMessage"],
+                  required: ["reference", "aiExplanation", "offerTitle", "personalizedMessage"],
                   additionalProperties: false
                 }
               }
@@ -59,7 +59,7 @@ async function generateBatch(items) {
             "El descuento maximo permitido es el descuento sugerido recibido y nunca debes aumentarlo.",
             "No afirmes que una reserva esta hecha ni que un mensaje fue enviado. La propuesta requiere aprobacion humana.",
             "Devuelve un objeto JSON con recommendations: array de objetos con customerCode, aiExplanation, offerTitle y personalizedMessage. aiExplanation debe explicar en una o dos frases por que la demora observada merece atencion, sin diagnosticar ni recalcular el riesgo.",
-            "Cada customerCode debe coincidir exactamente con la entrada. No incluyas texto fuera del JSON.",
+            "Cada reference debe coincidir exactamente con la entrada. No incluyas texto fuera del JSON.",
           ].join(" "),
         },
         {
@@ -103,9 +103,8 @@ export async function enrichRecommendations(recommendations) {
 
   for (let offset = 0; offset < selected.length; offset += MAX_BATCH_SIZE) {
     const batch = selected.slice(offset, offset + MAX_BATCH_SIZE);
-    const input = batch.map((item) => ({
-      customerCode: String(item.customerCode),
-      firstName: String(item.name ?? "").trim().split(/\s+/)[0],
+    const input = batch.map((item, index) => ({
+      reference: String(index + 1),
       riskLevel: item.riskLevel,
       daysSinceLastPurchase: item.daysSinceLastPurchase,
       usualIntervalDays: item.expectedIntervalDays,
@@ -116,9 +115,9 @@ export async function enrichRecommendations(recommendations) {
 
     try {
       const generated = await generateBatch(input);
-      const byCode = new Map(generated.map((item) => [String(item.customerCode), item]));
-      for (const original of batch) {
-        const candidate = byCode.get(String(original.customerCode));
+      const byReference = new Map(generated.map((item) => [String(item.reference), item]));
+      for (const [index, original] of batch.entries()) {
+        const candidate = byReference.get(String(index + 1));
         const aiExplanation = typeof candidate?.aiExplanation === "string" ? candidate.aiExplanation.trim() : "";
         const offerTitle = typeof candidate?.offerTitle === "string" ? candidate.offerTitle.trim() : "";
         const personalizedMessage = typeof candidate?.personalizedMessage === "string"
