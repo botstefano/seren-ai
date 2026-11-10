@@ -29,6 +29,7 @@ Seren AI ayuda a Origen Spa a anticipar el abandono de clientes recurrentes. Ana
 | Persistencia | Supabase PostgreSQL |
 | Analitica | OLTP + DataMart estrella |
 | Riesgo | Motor estadistico explicable |
+| IA generativa opcional | Groq API (GPT-OSS 120B) |
 | Despliegue | Render Blueprint |
 
 ~~~text
@@ -87,4 +88,4 @@ See docs/supabase-setup.md for Supabase setup and render.yaml for the Render Blu
 
 ## Security
 
-Never commit .env, the Supabase service-role key, passwords or provider tokens. The service-role key is used only by the Express API and must never be prefixed with VITE_.
+Never commit .env, the Supabase service-role key, passwords or provider tokens. The service-role key and GROQ_API_KEY are used only by the Express API and must never be prefixed with VITE_. Groq only personalizes the drafts; statistical churn rules remain authoritative, staff approval is required, and prompts use pseudonymous references instead of names or contact details.

@@ -20,11 +20,11 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: MISTRAL_API_KEY
+      - key: GROQ_API_KEY
         sync: false
-      - key: MISTRAL_MODEL
-        value: mistral-small-2603
-      - key: MISTRAL_MAX_AI_RECOMMENDATIONS
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_MAX_AI_RECOMMENDATIONS
         value: "20"
       - key: CHURN_MEDIUM_MULTIPLIER
         value: "1"
