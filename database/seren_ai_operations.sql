@@ -84,3 +84,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA seren_ai
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA seren_ai
     GRANT USAGE, SELECT ON SEQUENCES TO service_role;
+
+-- These tables are accessed only through the authenticated backend service role.
+ALTER TABLE seren_ai.agent_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE seren_ai.churn_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE seren_ai.reactivation_actions ENABLE ROW LEVEL SECURITY;
