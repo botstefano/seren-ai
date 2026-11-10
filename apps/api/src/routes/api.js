@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { loadAnalytics, createRecommendations, invalidateAnalyticsCache } from "../services/analytics.js";
@@ -146,7 +147,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
   try {
     const data = await loadAnalytics({ force: true });
     const recommendations = createRecommendations(data.customers);
-    const runId = crypto.randomUUID();
+    const runId = randomUUID();
 
     const { error: runError } = await supabase.schema("seren_ai").from("agent_runs").insert({
       run_id: runId,
