@@ -31,7 +31,7 @@ async function generateBatch(items) {
             "No cambies el nivel de riesgo ni recalcules metricas: son resultados deterministas ya calculados.",
             "El descuento maximo permitido es el descuento sugerido recibido y nunca debes aumentarlo.",
             "No afirmes que una reserva esta hecha ni que un mensaje fue enviado. La propuesta requiere aprobacion humana.",
-            "Devuelve un objeto JSON con la propiedad recommendations: array de objetos con customerCode, offerTitle y personalizedMessage.",
+            "Devuelve un objeto JSON con recommendations: array de objetos con customerCode, aiExplanation, offerTitle y personalizedMessage. aiExplanation debe explicar en una o dos frases por que la demora observada merece atencion, sin diagnosticar ni recalcular el riesgo.",
             "Cada customerCode debe coincidir exactamente con la entrada. No incluyas texto fuera del JSON.",
           ].join(" "),
         },
@@ -92,15 +92,15 @@ export async function enrichRecommendations(recommendations) {
       const byCode = new Map(generated.map((item) => [String(item.customerCode), item]));
       for (const original of batch) {
         const candidate = byCode.get(String(original.customerCode));
-        const offerTitle = typeof candidate?.offerTitle === "string" ? candidate.offerTitle.trim() : "";
+        const aiExplanation = typeof candidate?.aiExplanation === "string" ? candidate.aiExplanation.trim() : "";\n        const offerTitle = typeof candidate?.offerTitle === "string" ? candidate.offerTitle.trim() : "";
         const personalizedMessage = typeof candidate?.personalizedMessage === "string"
           ? candidate.personalizedMessage.trim()
           : "";
         const mentionedDiscounts = [...(offerTitle + " " + personalizedMessage).matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)]
           .map((match) => Number(match[1].replace(",", ".")));
         const discountIsSafe = mentionedDiscounts.every((value) => value === Number(original.offerDiscount));
-        if (offerTitle && personalizedMessage && discountIsSafe) {
-          output.push({ ...original, offerTitle: offerTitle.slice(0, 180), personalizedMessage: personalizedMessage.slice(0, 1200), aiGenerated: true });
+        if (aiExplanation && offerTitle && personalizedMessage && discountIsSafe) {
+          output.push({ ...original, aiExplanation: aiExplanation.slice(0, 500), offerTitle: offerTitle.slice(0, 180), personalizedMessage: personalizedMessage.slice(0, 1200), aiGenerated: true });
         } else {
           output.push({ ...original, aiGenerated: false });
         }
