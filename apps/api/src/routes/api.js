@@ -250,7 +250,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
 
 router.patch("/agent/actions/:actionId/status", async (req, res, next) => {
   try {
-    const allowed = new Set(["approved", "contacted", "reactivated", "dismissed"]);
+    const allowed = new Set(["approved", "contacted", "responded", "reactivated", "dismissed"]);
     const status = String(req.body?.status ?? "");
     if (!allowed.has(status)) {
       return res.status(400).json({ message: "Estado no valido." });
