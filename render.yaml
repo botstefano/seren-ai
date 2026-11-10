@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: seren-ai-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: feature/seren-ai-platform
+    autoDeployTrigger: commit
+    buildCommand: npm install && npm run build --workspace=@seren-ai/api
+    startCommand: npm run start --workspace=@seren-ai/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: CLIENT_ORIGIN
+        value: https://seren-ai-web.onrender.com
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CHURN_MEDIUM_MULTIPLIER
+        value: "1"
+      - key: CHURN_HIGH_MULTIPLIER
+        value: "1.5"
+      - key: DEFAULT_OFFER_DISCOUNT
+        value: "10"
+
+  - type: web
+    name: seren-ai-web
+    runtime: static
+    branch: feature/seren-ai-platform
+    buildCommand: npm install && npm run build --workspace=@seren-ai/web
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://seren-ai-api.onrender.com
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
