@@ -6,7 +6,6 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { Panel } from "../components/ui/Panel";
 import { ErrorState, LoadingState } from "../components/ui/Feedback";
-import { RiskBadge } from "../components/ui/RiskBadge";
 import { Link } from "react-router-dom";
 
 type Overview = {
