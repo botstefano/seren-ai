@@ -13,7 +13,7 @@ type Action = {
 type Recommendation = { usuarioKey: number; name: string; customerCode: string };
 
 function normalizeSearch(value: string) {
-  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase();
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
 }
 
 const labels: Record<string, string> = {
