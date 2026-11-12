@@ -15,7 +15,7 @@ type Customer = {
 };
 
 function normalizeSearch(value: string) {
-  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase();
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
 }
 
 export function ChurnPage() {
