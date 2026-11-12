@@ -119,6 +119,33 @@ export function AgentPage() {
     }
   }
 
+  async function requestNextBatch() {
+    setRunning(true); setError(""); setNotice("");
+    try {
+      const next = await api<NextBatchResult>("/agent/next-batch", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (next.generated > 0) {
+        setNotice("Se genero el lote " + next.batchNumber + " con " + next.generated + " nuevas recomendaciones de Groq.");
+        setSearch("");
+        setRiskFilter("ALL");
+        setPage(1);
+      } else if (next.queueComplete) {
+        setNotice(next.message ?? "No quedan mas clientes elegibles en esta ejecucion.");
+      } else if (next.waitingForApproval) {
+        setNotice("Aprobaciones del lote: " + next.approvedCount + " de " + next.batchSize + ".");
+      } else {
+        setNotice(next.message ?? "No se pudo generar el siguiente lote.");
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo generar el siguiente lote.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function updateAction(actionId: string, status: string) {
     setError(""); setNotice("");
     try {
@@ -144,10 +171,8 @@ export function AgentPage() {
             message += " Aprobaciones del lote: " + next.approvedCount + " de " + next.batchSize + ".";
           } else if (next.queueComplete) {
             message += " No quedan mas clientes elegibles en esta ejecucion.";
-          } else if (next.warning) {
-            message += " " + (next.message ?? "Groq no pudo generar este lote; puedes intentarlo nuevamente.");
-          } else if (next.message) {
-            message += " " + next.message;
+          } else if (next.warning || next.message) {
+            message += " " + (next.message ?? "Groq no pudo generar este lote; puedes reintentarlo.");
           }
         } catch (batchError) {
           message += " La aprobacion se guardo, pero no se pudo consultar el siguiente lote: " +
@@ -194,12 +219,20 @@ export function AgentPage() {
       {data.activeBatchSize ? (
         <div className="mb-4 flex flex-col gap-2 rounded-xl border border-line bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <div>
             <p className="text-sm font-bold text-ink">Lote {data.activeBatchNumber} · {data.activeBatchSize} recomendaciones de Groq</p>
             <p className="mt-1 text-xs text-muted">
               Pendientes de aprobacion: {pendingApprovalCount}. Clientes restantes por procesar: {data.remainingCandidates ?? 0}.
             </p>
           </div>
-          <span className="rounded-full bg-[#eaf0e9] px-3 py-1.5 text-[10px] font-bold text-forest">Solo contenido generado por IA</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#eaf0e9] px-3 py-1.5 text-[10px] font-bold text-forest">Solo contenido generado por IA</span>
+            {data.remainingCandidates !== undefined && data.remainingCandidates > 0 && pendingApprovalCount === 0 && (
+              <button className="primary-button" onClick={() => void requestNextBatch()} disabled={running}>
+                {running ? "Generando..." : "Procesar siguientes 20"}
+              </button>
+            )}
+          </div>
         </div>
       ) : null}
 
