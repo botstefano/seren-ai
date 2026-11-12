@@ -219,7 +219,6 @@ export function AgentPage() {
       {data.activeBatchSize ? (
         <div className="mb-4 flex flex-col gap-2 rounded-xl border border-line bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div>
             <p className="text-sm font-bold text-ink">Lote {data.activeBatchNumber} · {data.activeBatchSize} recomendaciones de Groq</p>
             <p className="mt-1 text-xs text-muted">
               Pendientes de aprobacion: {pendingApprovalCount}. Clientes restantes por procesar: {data.remainingCandidates ?? 0}.
