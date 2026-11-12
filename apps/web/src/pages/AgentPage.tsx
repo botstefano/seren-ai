@@ -356,13 +356,21 @@ export function AgentPage() {
           <p className="mt-3 font-display text-sm font-bold text-ink">
             {data.activeBatchNumber
               ? (data.remainingCandidates === 0 ? "No quedan mas clientes por procesar" : "No hay tarjetas de Groq en el lote actual")
-              : "Aun no se ha generado un lote de recomendaciones"}
+              : (data.remainingCandidates ?? 0) > 0 ? "El analisis esta listo para generar el primer lote" : "Aun no se ha generado un lote de recomendaciones"}
           </p>
           <p className="mt-1 text-xs text-muted">
             {data.activeBatchNumber && data.remainingCandidates === 0
               ? "El lote disponible ya fue procesado y no existen mas clientes elegibles en esta ejecucion."
-              : "Ejecuta el analisis para que Seren evalúe la cartera y genere hasta 20 propuestas mediante Groq AI. Las plantillas no se muestran."}
+              : (data.remainingCandidates ?? 0) > 0
+                ? "Hay " + data.remainingCandidates + " clientes elegibles en la ultima evaluacion. Puedes generar las primeras 20 propuestas sin volver a analizar toda la cartera."
+                : "Ejecuta el analisis para que Seren evalúe la cartera y genere hasta 20 propuestas mediante Groq AI. Las plantillas no se muestran."}
           </p>
+          {!data.activeBatchNumber && (data.remainingCandidates ?? 0) > 0 && data.aiProvider?.configured && (
+            <button className="primary-button mt-5" onClick={() => void requestNextBatch()} disabled={running}>
+              <Sparkles size={14} className={running ? "animate-spin" : ""} />
+              {running ? "Generando con Groq..." : "Generar primer lote de 20"}
+            </button>
+          )}
         </div>
       )}
     </>}
