@@ -450,30 +450,30 @@ router.post("/agent/next-batch", async (_req, res, next) => {
     const runActions = (allRunActions ?? []).filter((item) => assessmentIdSet.has(String(item.assessment_id)));
 
     const aiActions = runActions.filter((item) => item.ai_generated);
-    if (!aiActions.length) {
-      return res.status(409).json({
-        message: "No existe un lote generado por Groq para aprobar. Ejecuta nuevamente el analisis.",
-      });
-    }
-
     const batchTimes = [...new Set(aiActions.map((item) => item.created_at))].sort();
-    const currentBatchTime = batchTimes[batchTimes.length - 1];
-    const currentBatch = aiActions.filter((item) => item.created_at === currentBatchTime);
-    const approvalComplete = currentBatch.length > 0 && currentBatch.every((item) =>
-      ["approved", "contacted", "responded", "reactivated"].includes(item.status)
-    );
 
-    if (!approvalComplete) {
-      const approvedCount = currentBatch.filter((item) =>
+    // If an analysis assessed the portfolio but failed to persist its first
+    // Groq batch, allow this endpoint to create that first batch from the
+    // already saved assessments instead of forcing a full portfolio rerun.
+    if (aiActions.length) {
+      const currentBatchTime = batchTimes[batchTimes.length - 1];
+      const currentBatch = aiActions.filter((item) => item.created_at === currentBatchTime);
+      const approvalComplete = currentBatch.length > 0 && currentBatch.every((item) =>
         ["approved", "contacted", "responded", "reactivated"].includes(item.status)
-      ).length;
-      return res.json({
-        generated: 0,
-        waitingForApproval: true,
-        approvedCount,
-        batchSize: currentBatch.length,
-        message: "El lote actual todavia tiene recomendaciones pendientes de aprobacion.",
-      });
+      );
+
+      if (!approvalComplete) {
+        const approvedCount = currentBatch.filter((item) =>
+          ["approved", "contacted", "responded", "reactivated"].includes(item.status)
+        ).length;
+        return res.json({
+          generated: 0,
+          waitingForApproval: true,
+          approvedCount,
+          batchSize: currentBatch.length,
+          message: "El lote actual todavia tiene recomendaciones pendientes de aprobacion.",
+        });
+      }
     }
 
     const usersWithRunAction = new Set((runActions ?? []).map((item) => String(item.usuario_key)));
