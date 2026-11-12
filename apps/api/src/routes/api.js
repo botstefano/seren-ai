@@ -184,16 +184,8 @@ router.get("/agent/recommendations", async (_req, res, next) => {
         .range(0, 4999);
       if (assessmentError) throw assessmentError;
 
-      const assessmentIds = (assessments ?? []).map((item) => item.assessment_id);
-      const assessmentById = new Map((assessments ?? []).map((item) => [String(item.assessment_id), item]));
-      const { data: runActions, error: runActionsError } = assessmentIds.length
-        ? await supabase.schema("seren_ai").from("reactivation_actions")
-            .select("action_id,assessment_id,usuario_key,status,ai_generated,created_at")
-            .in("assessment_id", assessmentIds)
-            .order("created_at", { ascending: false })
-            .range(0, 4999)
-        : { data: [], error: null };
-      if (runActionsError) throw runActionsError;
+      const assessmentIdSet = new Set((assessments ?? []).map((item) => String(item.assessment_id)));
+      const runActions = (actions ?? []).filter((item) => assessmentIdSet.has(String(item.assessment_id)));
 
       const aiActions = (runActions ?? []).filter((item) => item.ai_generated);
       if (aiActions.length) {
@@ -396,17 +388,17 @@ router.post("/agent/next-batch", async (_req, res, next) => {
       .in("risk_level", ["HIGH", "MEDIUM"])
       .range(0, 4999);
     if (assessmentError) throw assessmentError;
-    const assessmentIds = (assessments ?? []).map((item) => item.assessment_id);
-    const { data: runActions, error: actionsError } = assessmentIds.length
-      ? await supabase.schema("seren_ai").from("reactivation_actions")
-          .select("assessment_id,usuario_key,status,ai_generated,created_at")
-          .in("assessment_id", assessmentIds)
-          .order("created_at", { ascending: false })
-          .range(0, 4999)
-      : { data: [], error: null };
+    const { data: allRunActions, error: actionsError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("assessment_id,usuario_key,status,ai_generated,created_at")
+      .order("created_at", { ascending: false })
+      .range(0, 4999);
     if (actionsError) throw actionsError;
+    const assessmentIdSet = new Set((assessments ?? []).map((item) => String(item.assessment_id)));
+    const runActions = (allRunActions ?? []).filter((item) => assessmentIdSet.has(String(item.assessment_id)));
 
-    const aiActions = (runActions ?? []).filter((item) => item.ai_generated);
+    const aiActions = runActions.filter((item) => item.ai_generated);
     if (!aiActions.length) {
       return res.status(409).json({
         message: "No existe un lote generado por Groq para aprobar. Ejecuta nuevamente el analisis.",
