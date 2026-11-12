@@ -333,12 +333,26 @@ router.post("/agent/analyze", async (_req, res, next) => {
       if (error) throw error;
     }
 
-    const { data: savedAssessments, error: readError } = await supabase
-      .schema("seren_ai")
-      .from("churn_assessments")
-      .select("assessment_id,run_id,usuario_key,risk_level,favorite_product_key")
-      .eq("run_id", runId);
-    if (readError) throw readError;
+    // Read back only the customers for whom Groq produced valid content.
+    // A full-run read can exceed PostgREST's default row cap (often 1,000),
+    // silently omitting selected customers when the run assessed more than 1,000.
+    let savedAssessments = [];
+    if (aiRecommendations.length) {
+      const { data: matchedAssessments, error: readError } = await supabase
+        .schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id,run_id,usuario_key,risk_level,favorite_product_key")
+        .eq("run_id", runId)
+        .in("usuario_key", aiRecommendations.map((item) => item.usuarioKey));
+      if (readError) throw readError;
+      savedAssessments = matchedAssessments ?? [];
+    }
+    if (savedAssessments.length !== aiRecommendations.length) {
+      console.warn(
+        "[agent/analyze] Groq/persistence mismatch:",
+        { groqGenerated: aiRecommendations.length, matchedAssessments: savedAssessments.length }
+      );
+    }
 
     const recByUser = new Map(aiRecommendations.map((item) => [String(item.usuarioKey), item]));
     const actions = (savedAssessments ?? [])
