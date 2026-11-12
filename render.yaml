@@ -39,6 +39,10 @@ services:
     branch: main
     buildCommand: npm install && npm run build --workspace=@seren-ai/web
     staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_API_URL
         sync: false
