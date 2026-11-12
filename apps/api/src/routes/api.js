@@ -399,7 +399,9 @@ router.post("/agent/analyze", async (_req, res, next) => {
       ai,
       message: actions.length
         ? "Analisis completado. Solo las recomendaciones generadas por Groq quedan visibles y pendientes de aprobacion."
-        : "Analisis completado, pero Groq no genero propuestas validas para mostrar. Puedes volver a ejecutar el analisis.",
+        : aiRecommendations.length
+          ? "Groq genero " + aiRecommendations.length + " propuestas, pero no se pudieron vincular con sus evaluaciones para guardarlas. Revisa el registro del backend antes de repetir el analisis."
+          : "Analisis completado, pero Groq no genero propuestas validas para mostrar. Puedes volver a ejecutar el analisis.",
     });
   } catch (error) {
     if (runId && supabase) {
