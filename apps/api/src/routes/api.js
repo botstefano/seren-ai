@@ -130,21 +130,27 @@ router.get("/agent/recommendations", async (_req, res, next) => {
       .from("reactivation_actions")
       .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,ai_explanation,offer_discount_pct,ai_generated,created_at,approved_at,contacted_at,reactivated_at")
       .order("created_at", { ascending: false })
-      .limit(500);
+      .limit(5000);
 
     if (error) {
       return res.json({
         migrationReady: false,
-        recommendations,
+        recommendations: [],
+        activeBatchRecommendations: [],
         actions: [],
+        activeBatchNumber: 0,
+        activeBatchSize: 0,
+        remainingCandidates: 0,
         migrationMessage: "Ejecuta la migracion database/seren_ai_operations.sql para habilitar el seguimiento de acciones.",
       });
     }
+
     const latestActionByUser = new Map();
     for (const action of actions ?? []) {
       const key = String(action.usuario_key);
       if (!latestActionByUser.has(key)) latestActionByUser.set(key, action);
     }
+
     const persistedRecommendations = recommendations.map((item) => {
       const action = latestActionByUser.get(String(item.usuarioKey));
       return action ? {
@@ -156,7 +162,78 @@ router.get("/agent/recommendations", async (_req, res, next) => {
         aiGenerated: Boolean(action.ai_generated),
       } : { ...item, aiGenerated: false };
     });
-    res.json({ migrationReady: true, recommendations: persistedRecommendations, actions: actions ?? [], aiProvider: { configured: Boolean(env.groqApiKey), model: env.groqModel } });
+
+    const { data: runs, error: runError } = await supabase
+      .schema("seren_ai")
+      .from("agent_runs")
+      .select("run_id,started_at,status")
+      .order("started_at", { ascending: false })
+      .limit(1);
+    if (runError) throw runError;
+
+    let activeBatchActions = [];
+    let activeBatchNumber = 0;
+    let remainingCandidates = 0;
+    if (runs?.length) {
+      const latestRun = runs[0];
+      const { data: assessments, error: assessmentError } = await supabase
+        .schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id,usuario_key,risk_level")
+        .eq("run_id", latestRun.run_id)
+        .range(0, 4999);
+      if (assessmentError) throw assessmentError;
+
+      const assessmentIds = (assessments ?? []).map((item) => item.assessment_id);
+      const assessmentById = new Map((assessments ?? []).map((item) => [String(item.assessment_id), item]));
+      const { data: runActions, error: runActionsError } = assessmentIds.length
+        ? await supabase.schema("seren_ai").from("reactivation_actions")
+            .select("action_id,assessment_id,usuario_key,status,ai_generated,created_at")
+            .in("assessment_id", assessmentIds)
+            .order("created_at", { ascending: false })
+            .range(0, 4999)
+        : { data: [], error: null };
+      if (runActionsError) throw runActionsError;
+
+      const aiActions = (runActions ?? []).filter((item) => item.ai_generated);
+      if (aiActions.length) {
+        const batchTimes = [...new Set(aiActions.map((item) => item.created_at))].sort();
+        const currentBatchTime = batchTimes[batchTimes.length - 1];
+        activeBatchActions = aiActions.filter((item) => item.created_at === currentBatchTime);
+        activeBatchNumber = batchTimes.length;
+      }
+
+      const usersWithRunAction = new Set((runActions ?? []).map((item) => String(item.usuario_key)));
+      const { data: openActions, error: openActionsError } = await supabase
+        .schema("seren_ai")
+        .from("reactivation_actions")
+        .select("usuario_key")
+        .in("status", ["proposed", "approved", "contacted", "responded"])
+        .range(0, 4999);
+      if (openActionsError) throw openActionsError;
+      const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
+      remainingCandidates = (assessments ?? []).filter((assessment) =>
+        ["HIGH", "MEDIUM"].includes(assessment.risk_level) &&
+        !usersWithRunAction.has(String(assessment.usuario_key)) &&
+        !usersWithOpenAction.has(String(assessment.usuario_key))
+      ).length;
+    }
+
+    const activeUsers = new Set(activeBatchActions.map((item) => String(item.usuario_key)));
+    const activeBatchRecommendations = persistedRecommendations.filter((item) =>
+      activeUsers.has(String(item.usuarioKey)) && item.aiGenerated === true
+    );
+
+    res.json({
+      migrationReady: true,
+      recommendations: persistedRecommendations,
+      activeBatchRecommendations,
+      activeBatchNumber,
+      activeBatchSize: activeBatchActions.length,
+      remainingCandidates,
+      actions: actions ?? [],
+      aiProvider: { configured: Boolean(env.groqApiKey), model: env.groqModel },
+    });
   } catch (error) {
     next(error);
   }
@@ -167,7 +244,9 @@ router.post("/agent/analyze", async (_req, res, next) => {
   try {
     const data = await loadAnalytics({ force: true });
     const baseRecommendations = createRecommendations(data.customers);
-    const { recommendations, ai } = await enrichRecommendations(baseRecommendations);
+    // Seren exposes only AI-generated recommendations. Template fallbacks are not persisted as actions.
+    const { recommendations, ai } = await enrichRecommendations(baseRecommendations.slice(0, 20));
+    const aiRecommendations = recommendations.filter((item) => item.aiGenerated === true);
     runId = randomUUID();
 
     const { error: runError } = await supabase.schema("seren_ai").from("agent_runs").insert({
@@ -179,7 +258,7 @@ router.post("/agent/analyze", async (_req, res, next) => {
       low_risk: data.kpis.lowRisk,
       insufficient_data: data.kpis.insufficientData,
     });
-    if (runError) throw new Error(`No se pudo guardar la ejecucion. Ejecuta la migracion Seren AI: ${runError.message}`);
+    if (runError) throw new Error("No se pudo guardar la ejecucion. Ejecuta la migracion Seren AI: " + runError.message);
 
     const now = new Date().toISOString();
     const assessments = data.customers.map((customer) => ({
@@ -210,12 +289,13 @@ router.post("/agent/analyze", async (_req, res, next) => {
       .eq("run_id", runId);
     if (readError) throw readError;
 
-    const recByUser = new Map(recommendations.map((item) => [String(item.usuarioKey), item]));
+    const recByUser = new Map(aiRecommendations.map((item) => [String(item.usuarioKey), item]));
     const { data: openActions, error: openActionsError } = await supabase
       .schema("seren_ai")
       .from("reactivation_actions")
       .select("usuario_key")
-      .in("status", ["proposed", "approved", "contacted", "responded"]);
+      .in("status", ["proposed", "approved", "contacted", "responded"])
+      .range(0, 4999);
     if (openActionsError) throw openActionsError;
 
     const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
@@ -235,7 +315,9 @@ router.post("/agent/analyze", async (_req, res, next) => {
           offer_title: recommendation.offerTitle,
           personalized_message: recommendation.personalizedMessage,
           ai_explanation: recommendation.aiExplanation ?? null,
-          ai_generated: Boolean(recommendation.aiGenerated),
+          ai_generated: true,
+          created_at: now,
+          updated_at: now,
         };
       });
 
@@ -259,7 +341,9 @@ router.post("/agent/analyze", async (_req, res, next) => {
       lowRisk: data.kpis.lowRisk,
       recommendationsCreated: actions.length,
       ai,
-      message: "Analisis completado. Las recomendaciones quedan pendientes de aprobacion humana.",
+      message: actions.length
+        ? "Analisis completado. Solo las recomendaciones generadas por Groq quedan visibles y pendientes de aprobacion."
+        : "Analisis completado, pero Groq no genero propuestas validas para mostrar. Puedes volver a ejecutar el analisis.",
     });
   } catch (error) {
     if (runId && supabase) {
@@ -267,6 +351,148 @@ router.post("/agent/analyze", async (_req, res, next) => {
         .update({ status: "failed", finished_at: new Date().toISOString(), error_message: String(error.message ?? error).slice(0, 2000) })
         .eq("run_id", runId);
     }
+    next(error);
+  }
+});
+
+router.post("/agent/next-batch", async (_req, res, next) => {
+  try {
+    const { data: runs, error: runError } = await supabase
+      .schema("seren_ai")
+      .from("agent_runs")
+      .select("run_id,status")
+      .order("started_at", { ascending: false })
+      .limit(1);
+    if (runError) throw runError;
+    if (!runs?.length) {
+      return res.status(409).json({ message: "Primero ejecuta el analisis del Agente Seren." });
+    }
+
+    const latestRun = runs[0];
+    if (latestRun.status !== "completed") {
+      return res.status(409).json({ message: "La ejecucion mas reciente aun no ha finalizado." });
+    }
+
+    const { data: assessments, error: assessmentError } = await supabase
+      .schema("seren_ai")
+      .from("churn_assessments")
+      .select("assessment_id,usuario_key,risk_level")
+      .eq("run_id", latestRun.run_id)
+      .in("risk_level", ["HIGH", "MEDIUM"])
+      .range(0, 4999);
+    if (assessmentError) throw assessmentError;
+    const assessmentIds = (assessments ?? []).map((item) => item.assessment_id);
+    const { data: runActions, error: actionsError } = assessmentIds.length
+      ? await supabase.schema("seren_ai").from("reactivation_actions")
+          .select("assessment_id,usuario_key,status,ai_generated,created_at")
+          .in("assessment_id", assessmentIds)
+          .order("created_at", { ascending: false })
+          .range(0, 4999)
+      : { data: [], error: null };
+    if (actionsError) throw actionsError;
+
+    const aiActions = (runActions ?? []).filter((item) => item.ai_generated);
+    if (!aiActions.length) {
+      return res.status(409).json({
+        message: "No existe un lote generado por Groq para aprobar. Ejecuta nuevamente el analisis.",
+      });
+    }
+
+    const batchTimes = [...new Set(aiActions.map((item) => item.created_at))].sort();
+    const currentBatchTime = batchTimes[batchTimes.length - 1];
+    const currentBatch = aiActions.filter((item) => item.created_at === currentBatchTime);
+    const approvalComplete = currentBatch.length > 0 && currentBatch.every((item) =>
+      ["approved", "contacted", "responded", "reactivated"].includes(item.status)
+    );
+
+    if (!approvalComplete) {
+      const approvedCount = currentBatch.filter((item) =>
+        ["approved", "contacted", "responded", "reactivated"].includes(item.status)
+      ).length;
+      return res.json({
+        generated: 0,
+        waitingForApproval: true,
+        approvedCount,
+        batchSize: currentBatch.length,
+        message: "El lote actual todavia tiene recomendaciones pendientes de aprobacion.",
+      });
+    }
+
+    const usersWithRunAction = new Set((runActions ?? []).map((item) => String(item.usuario_key)));
+    const { data: openActions, error: openActionsError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("usuario_key")
+      .in("status", ["proposed", "approved", "contacted", "responded"])
+      .range(0, 4999);
+    if (openActionsError) throw openActionsError;
+    const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
+
+    const eligibleUserKeys = new Set((assessments ?? [])
+      .filter((item) =>
+        !usersWithRunAction.has(String(item.usuario_key)) &&
+        !usersWithOpenAction.has(String(item.usuario_key))
+      )
+      .map((item) => String(item.usuario_key)));
+
+    const data = await loadAnalytics({ force: true });
+    const allCandidates = createRecommendations(data.customers)
+      .filter((item) => eligibleUserKeys.has(String(item.usuarioKey)))
+      .slice(0, 20);
+
+    if (!allCandidates.length) {
+      return res.json({
+        generated: 0,
+        queueComplete: true,
+        batchNumber: batchTimes.length,
+        remainingCandidates: 0,
+        message: "Todos los clientes elegibles de esta ejecucion ya fueron procesados.",
+      });
+    }
+
+    const { recommendations, ai } = await enrichRecommendations(allCandidates);
+    const aiRecommendations = recommendations.filter((item) => item.aiGenerated === true);
+    if (!aiRecommendations.length) {
+      return res.json({
+        generated: 0,
+        warning: true,
+        ai,
+        remainingCandidates: allCandidates.length,
+        message: "Groq no genero propuestas validas para este lote. No se mostraron mensajes de plantilla; puedes intentarlo nuevamente.",
+      });
+    }
+
+    const assessmentByUser = new Map((assessments ?? []).map((item) => [String(item.usuario_key), item]));
+    const now = new Date().toISOString();
+    const actions = aiRecommendations.map((recommendation) => {
+      const assessment = assessmentByUser.get(String(recommendation.usuarioKey));
+      return {
+        assessment_id: assessment.assessment_id,
+        usuario_key: recommendation.usuarioKey,
+        status: "proposed",
+        favorite_product_key: recommendation.favoriteProduct?.key ?? null,
+        offer_discount_pct: recommendation.offerDiscount,
+        offer_title: recommendation.offerTitle,
+        personalized_message: recommendation.personalizedMessage,
+        ai_explanation: recommendation.aiExplanation ?? null,
+        ai_generated: true,
+        created_at: now,
+        updated_at: now,
+      };
+    });
+
+    const { error: insertError } = await supabase.schema("seren_ai").from("reactivation_actions")
+      .upsert(actions, { onConflict: "assessment_id", ignoreDuplicates: true });
+    if (insertError) throw insertError;
+
+    res.json({
+      generated: actions.length,
+      batchNumber: batchTimes.length + 1,
+      remainingCandidates: Math.max(0, allCandidates.length - actions.length),
+      ai,
+      message: "El siguiente lote de recomendaciones generadas por Groq ya esta disponible.",
+    });
+  } catch (error) {
     next(error);
   }
 });
