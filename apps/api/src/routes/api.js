@@ -250,7 +250,16 @@ router.post("/agent/analyze", async (_req, res, next) => {
     }
 
     const data = await loadAnalytics({ force: true });
-    const baseRecommendations = createRecommendations(data.customers);
+    const { data: openActions, error: openActionsError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("usuario_key")
+      .in("status", ["proposed", "approved", "contacted", "responded"])
+      .range(0, 4999);
+    if (openActionsError) throw openActionsError;
+    const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
+    const baseRecommendations = createRecommendations(data.customers)
+      .filter((item) => !usersWithOpenAction.has(String(item.usuarioKey)));
     // Seren exposes only AI-generated recommendations. Template fallbacks are not persisted as actions.
     const { recommendations, ai } = await enrichRecommendations(baseRecommendations.slice(0, 20));
     const aiRecommendations = recommendations.filter((item) => item.aiGenerated === true);
@@ -297,15 +306,6 @@ router.post("/agent/analyze", async (_req, res, next) => {
     if (readError) throw readError;
 
     const recByUser = new Map(aiRecommendations.map((item) => [String(item.usuarioKey), item]));
-    const { data: openActions, error: openActionsError } = await supabase
-      .schema("seren_ai")
-      .from("reactivation_actions")
-      .select("usuario_key")
-      .in("status", ["proposed", "approved", "contacted", "responded"])
-      .range(0, 4999);
-    if (openActionsError) throw openActionsError;
-
-    const usersWithOpenAction = new Set((openActions ?? []).map((item) => String(item.usuario_key)));
     const actions = (savedAssessments ?? [])
       .filter((assessment) =>
         recByUser.has(String(assessment.usuario_key)) &&
