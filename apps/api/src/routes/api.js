@@ -228,6 +228,7 @@ router.get("/agent/recommendations", async (_req, res, next) => {
       migrationReady: true,
       recommendations: persistedRecommendations,
       activeBatchRecommendations,
+      activeBatchActions,
       activeBatchNumber,
       activeBatchSize: activeBatchActions.length,
       remainingCandidates,
@@ -242,6 +243,20 @@ router.get("/agent/recommendations", async (_req, res, next) => {
 router.post("/agent/analyze", async (_req, res, next) => {
   let runId = null;
   try {
+    const { data: pendingApprovals, error: pendingError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("action_id")
+      .eq("ai_generated", true)
+      .eq("status", "proposed")
+      .limit(1);
+    if (pendingError) throw pendingError;
+    if (pendingApprovals?.length) {
+      return res.status(409).json({
+        message: "Termina de aprobar las recomendaciones del lote actual antes de iniciar un nuevo analisis.",
+      });
+    }
+
     const data = await loadAnalytics({ force: true });
     const baseRecommendations = createRecommendations(data.customers);
     // Seren exposes only AI-generated recommendations. Template fallbacks are not persisted as actions.
