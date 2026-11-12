@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, ArrowUpRight, CircleAlert, ShieldCheck } from "lucide-react";
+import { Activity, ArrowUpRight, CircleAlert, Search, ShieldCheck } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
@@ -14,9 +14,14 @@ type Customer = {
   riskScore: number; riskReason: string; favoriteProduct: { name: string } | null;
 };
 
+function normalizeSearch(value: string) {
+  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase();
+}
+
 export function ChurnPage() {
   const [items, setItems] = useState<Customer[]>([]);
   const [risk, setRisk] = useState("ALL");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -32,6 +37,10 @@ export function ChurnPage() {
 
   const high = items.filter((item) => item.riskLevel === "HIGH").length;
   const medium = items.filter((item) => item.riskLevel === "MEDIUM").length;
+  const term = normalizeSearch(search.trim());
+  const filteredItems = items.filter((customer) => !term ||
+    normalizeSearch(customer.name).includes(term) || normalizeSearch(customer.customerCode).includes(term)
+  );
 
   return <>
     <PageHeader eyebrow="Early warning system" title="Detecta antes de perder." description="El riesgo se calcula individualmente comparando el tiempo desde la ultima compra con la mediana historica de los intervalos de cada Customer." />
@@ -43,8 +52,22 @@ export function ChurnPage() {
     <Panel title="Customers con señales de abandono" subtitle="Ordenados por nivel y puntuacion de riesgo" action={<select className="select-control" value={risk} onChange={(event) => setRisk(event.target.value)}><option value="ALL">Todos los riesgos</option><option value="HIGH">Solo alto</option><option value="MEDIUM">Solo moderado</option></select>}>
       {loading && <LoadingState />}
       {error && <ErrorState message={error} onRetry={() => void load()} />}
-      {!loading && !error && <div className="space-y-3">
-        {items.map((customer) => <div key={customer.usuarioKey} className="rounded-2xl border border-line bg-white/70 p-4 transition hover:border-[#c9d5c9]">
+      {!loading && !error && <>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative min-w-0 flex-1">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              className="input-control pl-10"
+              placeholder="Buscar cliente por nombre o codigo..."
+              aria-label="Buscar cliente por nombre o codigo"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <span className="text-[10px] text-muted">{filteredItems.length} clientes encontrados</span>
+        </div>
+        <div className="space-y-3">
+        {filteredItems.map((customer) => <div key={customer.usuarioKey} className="rounded-2xl border border-line bg-white/70 p-4 transition hover:border-[#c9d5c9]">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink">{customer.name}</p><RiskBadge level={customer.riskLevel} /><span className="text-[10px] text-muted">ID {customer.customerCode}</span></div>
@@ -59,8 +82,9 @@ export function ChurnPage() {
             <Link to="/agent" className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[11px] font-bold text-forest hover:bg-[#edf3ed]">Ver recomendacion <ArrowUpRight size={14} /></Link>
           </div>
         </div>)}
-        {!items.length && <div className="py-12 text-center text-xs text-muted">No hay clientes en este nivel de riesgo.</div>}
-      </div>}
+        {!filteredItems.length && <div className="py-12 text-center text-xs text-muted">{term ? "No se encontraron clientes con ese nombre o codigo." : "No hay clientes en este nivel de riesgo."}</div>}
+        </div>
+      </>}
     </Panel>
   </>;
 }
