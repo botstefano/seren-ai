@@ -235,18 +235,53 @@ router.get("/agent/recommendations", async (_req, res, next) => {
 router.post("/agent/analyze", async (_req, res, next) => {
   let runId = null;
   try {
-    const { data: pendingApprovals, error: pendingError } = await supabase
+    // Only block a new analysis while the visible, newest batch still has proposals pending.
+    // Older/orphaned proposals remain in Reactivaciones history and must not lock the agent screen.
+    const { data: latestRunsForGuard, error: latestRunGuardError } = await supabase
       .schema("seren_ai")
-      .from("reactivation_actions")
-      .select("action_id")
-      .eq("ai_generated", true)
-      .eq("status", "proposed")
+      .from("agent_runs")
+      .select("run_id")
+      .order("started_at", { ascending: false })
       .limit(1);
-    if (pendingError) throw pendingError;
-    if (pendingApprovals?.length) {
-      return res.status(409).json({
-        message: "Termina de aprobar las recomendaciones del lote actual antes de iniciar un nuevo analisis.",
-      });
+    if (latestRunGuardError) throw latestRunGuardError;
+
+    if (latestRunsForGuard?.length) {
+      const latestRunForGuard = latestRunsForGuard[0];
+      const { data: guardAssessments, error: guardAssessmentError } = await supabase
+        .schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id")
+        .eq("run_id", latestRunForGuard.run_id)
+        .range(0, 4999);
+      if (guardAssessmentError) throw guardAssessmentError;
+
+      const guardAssessmentIds = new Set((guardAssessments ?? []).map((item) => String(item.assessment_id)));
+      const { data: guardActions, error: guardActionsError } = await supabase
+        .schema("seren_ai")
+        .from("reactivation_actions")
+        .select("assessment_id,status,ai_generated,created_at")
+        .order("created_at", { ascending: false })
+        .range(0, 4999);
+      if (guardActionsError) throw guardActionsError;
+
+      const runAiActions = (guardActions ?? []).filter((item) =>
+        item.ai_generated && guardAssessmentIds.has(String(item.assessment_id))
+      );
+      if (runAiActions.length) {
+        const batchTimes = [...new Set(runAiActions.map((item) => item.created_at))].sort();
+        const activeBatchTime = batchTimes[batchTimes.length - 1];
+        const pendingActiveBatch = runAiActions.filter((item) =>
+          item.created_at === activeBatchTime && item.status === "proposed"
+        );
+
+        if (pendingActiveBatch.length) {
+          return res.status(409).json({
+            message: "Termina de aprobar las recomendaciones del lote actual antes de iniciar un nuevo analisis.",
+            pendingApprovals: pendingActiveBatch.length,
+            batchSize: runAiActions.filter((item) => item.created_at === activeBatchTime).length,
+          });
+        }
+      }
     }
 
     const data = await loadAnalytics({ force: true });
