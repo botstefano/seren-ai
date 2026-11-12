@@ -103,9 +103,14 @@ export function AgentPage() {
         assessedCustomers: number; recommendationsCreated: number; highRisk: number; mediumRisk: number;
         message: string; ai?: { used: boolean; model: string; generated: number; fallback: number; warning?: string };
       }>("/agent/analyze", { method: "POST", body: JSON.stringify({}) });
+      const groqGenerated = result.ai?.generated ?? result.recommendationsCreated;
+      const savedCards = result.recommendationsCreated;
       setNotice(
         result.message + " Clientes evaluados: " + result.assessedCustomers +
-        ". Tarjetas generadas por Groq: " + (result.ai?.generated ?? result.recommendationsCreated) + "." +
+        ". Tarjetas de Groq guardadas: " + savedCards + "." +
+        (groqGenerated !== savedCards
+          ? " Groq valido " + groqGenerated + " propuestas, pero solo se guardaron " + savedCards + "."
+          : "") +
         (result.ai?.warning ? " " + result.ai.warning : "")
       );
       setSearch("");
