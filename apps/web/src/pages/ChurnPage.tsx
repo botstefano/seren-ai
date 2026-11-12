@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Activity, ArrowUpRight, CircleAlert, ShieldCheck } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -55,7 +56,7 @@ export function ChurnPage() {
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#edf0e9]"><div className={"h-full rounded-full " + (customer.riskLevel === "HIGH" ? "bg-[#c87962]" : "bg-[#c7a46e]")} style={{ width: customer.riskScore + "%" }} /></div>
               <p className="mt-2 text-right text-[10px] text-muted">{customer.overdueRatio ? customer.overdueRatio.toFixed(2) + "x de su intervalo" : "Sin intervalo"}</p>
             </div>
-            <a href="/agent" className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[11px] font-bold text-forest hover:bg-[#edf3ed]">Ver recomendacion <ArrowUpRight size={14} /></a>
+            <Link to="/agent" className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[11px] font-bold text-forest hover:bg-[#edf3ed]">Ver recomendacion <ArrowUpRight size={14} /></Link>
           </div>
         </div>)}
         {!items.length && <div className="py-12 text-center text-xs text-muted">No hay clientes en este nivel de riesgo.</div>}
