@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, MessageSquareText, UserCheck } from "lucide-react";
+import { CheckCircle2, Clock3, MessageSquareText, Search, UserCheck } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
@@ -11,6 +11,10 @@ type Action = {
   contacted_at?: string; reactivated_at?: string;
 };
 type Recommendation = { usuarioKey: number; name: string; customerCode: string };
+
+function normalizeSearch(value: string) {
+  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase();
+}
 
 const labels: Record<string, string> = {
   proposed: "Pendiente", approved: "Aprobada", contacted: "Contactado",
@@ -25,6 +29,7 @@ const styles: Record<string, string> = {
 export function CampaignsPage() {
   const [actions, setActions] = useState<Action[]>([]);
   const [customers, setCustomers] = useState<Recommendation[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -39,6 +44,15 @@ export function CampaignsPage() {
   useEffect(() => { void load(); }, []);
 
   const names = new Map(customers.map((item) => [String(item.usuarioKey), item]));
+  const term = normalizeSearch(search.trim());
+  const filteredActions = actions.filter((action) => {
+    const person = names.get(String(action.usuario_key));
+    const fallbackName = "Customer #" + action.usuario_key;
+    return !term ||
+      normalizeSearch(person?.name ?? fallbackName).includes(term) ||
+      normalizeSearch(person?.customerCode ?? "").includes(term) ||
+      normalizeSearch(String(action.usuario_key)).includes(term);
+  });
   const contacted = actions.filter((item) => ["contacted", "responded", "reactivated"].includes(item.status)).length;
   const reactivated = actions.filter((item) => item.status === "reactivated").length;
 
@@ -53,13 +67,32 @@ export function CampaignsPage() {
       {loading && <LoadingState />}
       {error && <ErrorState message={error} onRetry={() => void load()} />}
       {!loading && !error && !actions.length && <div className="py-12 text-center"><CheckCircle2 className="mx-auto text-forest" size={24} /><p className="mt-3 text-sm font-semibold text-ink">Aun no hay acciones registradas</p><p className="mt-1 text-xs text-muted">Ejecuta el analisis en Agente Seren para generar propuestas.</p></div>}
-      {!loading && !error && actions.length > 0 && <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Accion recomendada</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
-        {actions.map((action) => {
-          const person = names.get(String(action.usuario_key));
-          const updated = action.reactivated_at ?? action.contacted_at ?? action.approved_at ?? action.created_at;
-          return <tr key={action.action_id}><td><div className="font-semibold text-ink">{person?.name ?? "Customer #" + action.usuario_key}</div><div className="text-[10px] text-muted">{person?.customerCode ?? ""}</div></td><td>{action.offer_title}</td><td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td><td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td></tr>;
-        })}
-      </tbody></table></div>}
+      {!loading && !error && actions.length > 0 && <>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative min-w-0 flex-1">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              className="input-control pl-10"
+              placeholder="Buscar cliente por nombre o codigo..."
+              aria-label="Buscar cliente por nombre o codigo"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <span className="text-[10px] text-muted">{filteredActions.length} de {actions.length} acciones</span>
+        </div>
+        {filteredActions.length > 0 ? (
+          <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Accion recomendada</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
+            {filteredActions.map((action) => {
+              const person = names.get(String(action.usuario_key));
+              const updated = action.reactivated_at ?? action.contacted_at ?? action.approved_at ?? action.created_at;
+              return <tr key={action.action_id}><td><div className="font-semibold text-ink">{person?.name ?? "Customer #" + action.usuario_key}</div><div className="text-[10px] text-muted">{person?.customerCode ?? ""}</div></td><td>{action.offer_title}</td><td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td><td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td></tr>;
+            })}
+          </tbody></table></div>
+        ) : (
+          <div className="py-10 text-center text-xs text-muted">No se encontraron acciones para ese nombre o codigo de cliente.</div>
+        )}
+      </>}
     </Panel>
   </>;
 }
