@@ -164,7 +164,7 @@ export function AssistantWidget({ section }: { section: string }) {
               />
               <button type="submit" disabled={!draft.trim() || sending} aria-label="Enviar pregunta" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-forest text-white transition hover:bg-[#315b4b] disabled:cursor-not-allowed disabled:opacity-40"><Send size={15} /></button>
             </div>
-            <p className="mt-1.5 px-1 text-center text-[9px] text-muted">No comparte identificadores de clientes ni modifica datos. Enter para enviar · Shift + Enter para nueva linea.</p>
+            <p className="mt-1.5 px-1 text-center text-[9px] text-muted">Contexto con indicadores agregados. Evita escribir datos personales. No modifica datos.</p>
           </form>
         </section>
       )}
