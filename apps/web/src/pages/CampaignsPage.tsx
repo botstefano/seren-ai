@@ -42,6 +42,11 @@ export function CampaignsPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    window.addEventListener("seren:data-updated", refresh);
+    return () => window.removeEventListener("seren:data-updated", refresh);
+  }, []);
 
   const names = new Map(customers.map((item) => [String(item.usuarioKey), item]));
   const term = normalizeSearch(search.trim());
