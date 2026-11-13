@@ -63,6 +63,11 @@ export function AgentPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    window.addEventListener("seren:data-updated", refresh);
+    return () => window.removeEventListener("seren:data-updated", refresh);
+  }, []);
   useEffect(() => { setPage(1); }, [search, riskFilter]);
 
   const activeRecommendations = useMemo(
