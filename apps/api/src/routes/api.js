@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { loadAnalytics, createRecommendations, invalidateAnalyticsCache } from "../services/analytics.js";
 import { enrichRecommendations } from "../services/groq.js";
+import { answerAssistant, buildAssistantContext } from "../services/assistant.js";
 import { env } from "../config/env.js";
 
 const router = Router();
@@ -28,6 +29,60 @@ router.get("/me", (req, res) => {
     email: req.user.email,
     name: req.user.user_metadata?.full_name ?? req.user.email,
   });
+});
+
+const assistantRequests = new Map();
+const ASSISTANT_SECTIONS = new Set(["overview", "customers", "churn", "agent", "campaigns", "reports", "settings"]);
+
+router.post("/assistant/chat", async (req, res, next) => {
+  try {
+    const section = String(req.body?.section ?? "overview");
+    const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    if (!ASSISTANT_SECTIONS.has(section)) {
+      return res.status(400).json({ message: "La pestaña indicada no es valida." });
+    }
+
+    const messages = rawMessages.slice(-10)
+      .filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.content === "string")
+      .map((item) => ({ role: item.role, content: item.content.trim().slice(0, 2000) }))
+      .filter((item) => item.content.length > 0);
+    if (!messages.length || messages[messages.length - 1].role !== "user") {
+      return res.status(400).json({ message: "Escribe una pregunta para el asistente." });
+    }
+    if (messages[messages.length - 1].content.length > 1500) {
+      return res.status(400).json({ message: "La pregunta supera el limite de 1,500 caracteres." });
+    }
+
+    // Small per-user in-memory limit to prevent accidental repeated Groq calls.
+    const now = Date.now();
+    const userKey = String(req.user.id);
+    const usage = assistantRequests.get(userKey) ?? { windowStartedAt: now, count: 0 };
+    if (now - usage.windowStartedAt >= 60_000) {
+      usage.windowStartedAt = now;
+      usage.count = 0;
+    }
+    if (usage.count >= 15) {
+      return res.status(429).json({ message: "Has alcanzado el limite temporal del asistente. Intentalo nuevamente en un minuto." });
+    }
+    usage.count += 1;
+    assistantRequests.set(userKey, usage);
+
+    const analytics = await loadAnalytics();
+    let actionRows = [];
+    const { data: actions, error: actionsError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("status,ai_generated,created_at")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    if (!actionsError && actions) actionRows = actions;
+
+    const context = buildAssistantContext(section, analytics, actionRows);
+    const answer = await answerAssistant({ section, messages, context });
+    res.json({ answer, section, model: env.groqModel });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/overview", async (_req, res, next) => {
