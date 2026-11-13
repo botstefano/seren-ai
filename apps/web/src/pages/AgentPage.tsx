@@ -330,9 +330,11 @@ export function AgentPage() {
                           <Sparkles size={13} /> Trabajar con Seren
                         </button>
                         {action ? (
-                          {action.status === "proposed" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "approved")}><Check size={13} /> Aprobar</button>}
-                          {action.status === "approved" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "contacted")}><MessageCircle size={13} /> Registrar contacto</button>}
-                          {action.status === "contacted" && <button className="primary-button" onClick={() => void updateAction(action.action_id, "reactivated")}><UserCheck size={13} /> Marcar reactivado</button>}
+                          <>
+                            {action.status === "proposed" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "approved")}><Check size={13} /> Aprobar</button>}
+                            {action.status === "approved" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "contacted")}><MessageCircle size={13} /> Registrar contacto</button>}
+                            {action.status === "contacted" && <button className="primary-button" onClick={() => void updateAction(action.action_id, "reactivated")}><UserCheck size={13} /> Marcar reactivado</button>}
+                          </>
                         ) : <span className="text-[10px] text-muted">Sin accion guardada</span>}
                       </div>
                     </div>
