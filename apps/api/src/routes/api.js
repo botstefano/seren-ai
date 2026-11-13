@@ -202,13 +202,16 @@ router.post("/assistant/chat", async (req, res, next) => {
             .range(0, 4999);
           if (latestRunAssessmentError) throw latestRunAssessmentError;
           const pending = await hasPendingLatestBatch(latestRunAssessments, actionRows ?? []);
-          canCreateOffer = !pending;
+          const assessmentIsInLatestRun = (latestRunAssessments ?? []).some((item) =>
+            String(item.assessment_id) === String(latestAssessment.assessment_id)
+          );
+          canCreateOffer = !pending && assessmentIsInLatestRun;
         }
       }
 
       const canEditOffer = Boolean(selectedAction?.ai_generated) &&
         ["proposed", "approved"].includes(selectedAction.status);
-      const availableStatuses = selectedAction
+      const availableStatuses = selectedAction?.ai_generated
         ? (ACTION_TRANSITIONS[selectedAction.status] ?? [])
         : [];
       const canCopyMessage = Boolean(selectedAction?.ai_generated && selectedAction.personalized_message);
@@ -483,6 +486,12 @@ router.post("/assistant/execute", async (req, res, next) => {
         .eq("run_id", latestRuns[0].run_id)
         .range(0, 4999);
       if (latestAssessmentsError) throw latestAssessmentsError;
+      const assessmentIsInLatestRun = (latestAssessments ?? []).some((item) =>
+        String(item.assessment_id) === String(pending.assessmentId)
+      );
+      if (!assessmentIsInLatestRun) {
+        return res.status(409).json({ message: "La evaluacion seleccionada no pertenece al analisis mas reciente. Ejecuta o actualiza el analisis antes de crear una oferta." });
+      }
       const { data: allActions, error: allActionsError } = await supabase.schema("seren_ai")
         .from("reactivation_actions")
         .select("assessment_id,status,ai_generated,created_at")
