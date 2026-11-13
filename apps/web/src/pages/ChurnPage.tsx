@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, ArrowUpRight, CircleAlert, Search, ShieldCheck } from "lucide-react";
+import { Activity, ArrowUpRight, CircleAlert, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
@@ -12,6 +12,7 @@ type Customer = {
   lastPurchaseDate: string; totalPurchases: number; daysSinceLastPurchase: number | null;
   expectedIntervalDays: number | null; overdueRatio: number | null; riskLevel: string;
   riskScore: number; riskReason: string; favoriteProduct: { name: string } | null;
+  reactivationAction: { actionId: string; status: string; offerTitle: string; personalizedMessage: string; offerDiscountPct: number; aiGenerated: boolean; updatedAt: string } | null;
 };
 
 function normalizeSearch(value: string) {
@@ -34,6 +35,11 @@ export function ChurnPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, [risk]);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    window.addEventListener("seren:data-updated", refresh);
+    return () => window.removeEventListener("seren:data-updated", refresh);
+  }, [risk]);
 
   const high = items.filter((item) => item.riskLevel === "HIGH").length;
   const medium = items.filter((item) => item.riskLevel === "MEDIUM").length;
@@ -73,13 +79,32 @@ export function ChurnPage() {
               <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink">{customer.name}</p><RiskBadge level={customer.riskLevel} /><span className="text-[10px] text-muted">ID {customer.customerCode}</span></div>
               <p className="mt-1.5 text-xs leading-5 text-muted">{customer.riskReason}</p>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[10px] text-muted"><span>Ultima compra: {formatDate(customer.lastPurchaseDate)}</span><span>{customer.daysSinceLastPurchase ?? "—"} dias sin volver</span><span>Habitual: {customer.expectedIntervalDays ?? "—"} dias</span><span>{customer.favoriteProduct?.name ?? "Preferencia por identificar"}</span></div>
+              {customer.reactivationAction?.aiGenerated && (
+                <div className="mt-3 rounded-xl border border-[#dce7dc] bg-[#f5f8f3] px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-forest">Propuesta guardada</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-semibold text-muted">{customer.reactivationAction.status}</span>
+                    <span className="text-[10px] font-bold text-forest">{customer.reactivationAction.offerDiscountPct}% descuento</span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-ink">{customer.reactivationAction.offerTitle}</p>
+                </div>
+              )}
             </div>
             <div className="w-full shrink-0 md:w-40">
               <div className="flex items-center justify-between text-[10px]"><span className="font-semibold text-muted">Indice de demora</span><span className="font-bold text-ink">{customer.riskScore}/100</span></div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#edf0e9]"><div className={"h-full rounded-full " + (customer.riskLevel === "HIGH" ? "bg-[#c87962]" : "bg-[#c7a46e]")} style={{ width: customer.riskScore + "%" }} /></div>
               <p className="mt-2 text-right text-[10px] text-muted">{customer.overdueRatio ? customer.overdueRatio.toFixed(2) + "x de su intervalo" : "Sin intervalo"}</p>
             </div>
-            <Link to="/agent" className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[11px] font-bold text-forest hover:bg-[#edf3ed]">Ver recomendacion <ArrowUpRight size={14} /></Link>
+            <div className="flex shrink-0 flex-col gap-2 md:w-44">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("seren:select-customer", { detail: { customerKey: customer.usuarioKey, customerLabel: customer.name } }))}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-forest px-3 py-2 text-[11px] font-bold text-white hover:bg-[#315b4b]"
+              >
+                <Sparkles size={14} /> Trabajar con Seren
+              </button>
+              <Link to="/agent" className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[11px] font-bold text-forest hover:bg-[#edf3ed]">Ver en Agente <ArrowUpRight size={14} /></Link>
+            </div>
           </div>
         </div>)}
         {!filteredItems.length && <div className="py-12 text-center text-xs text-muted">{term ? "No se encontraron clientes con ese nombre o codigo." : "No hay clientes en este nivel de riesgo."}</div>}
