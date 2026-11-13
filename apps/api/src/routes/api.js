@@ -608,10 +608,40 @@ router.get("/churn", async (req, res, next) => {
   try {
     const data = await loadAnalytics();
     const risk = String(req.query.risk ?? "ALL").toUpperCase();
-    const customers = data.customers.filter((customer) =>
-      ["HIGH", "MEDIUM"].includes(customer.riskLevel) &&
-      (risk === "ALL" || customer.riskLevel === risk)
-    );
+    const { data: actionRows, error: actionError } = await supabase
+      .schema("seren_ai")
+      .from("reactivation_actions")
+      .select("action_id,usuario_key,status,offer_title,personalized_message,offer_discount_pct,ai_generated,updated_at,created_at")
+      .order("created_at", { ascending: false })
+      .range(0, 4999);
+    if (actionError) throw actionError;
+
+    const latestActionByUser = new Map();
+    for (const action of actionRows ?? []) {
+      const key = String(action.usuario_key);
+      if (!latestActionByUser.has(key)) latestActionByUser.set(key, action);
+    }
+
+    const customers = data.customers
+      .filter((customer) =>
+        ["HIGH", "MEDIUM"].includes(customer.riskLevel) &&
+        (risk === "ALL" || customer.riskLevel === risk)
+      )
+      .map((customer) => {
+        const action = latestActionByUser.get(String(customer.usuarioKey));
+        return {
+          ...customer,
+          reactivationAction: action ? {
+            actionId: action.action_id,
+            status: action.status,
+            offerTitle: action.offer_title,
+            personalizedMessage: action.personalized_message,
+            offerDiscountPct: Number(action.offer_discount_pct ?? 0),
+            aiGenerated: Boolean(action.ai_generated),
+            updatedAt: action.updated_at,
+          } : null,
+        };
+      });
     res.json({ total: customers.length, customers });
   } catch (error) {
     next(error);
