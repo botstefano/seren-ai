@@ -55,13 +55,15 @@ export function AssistantWidget({ section }: { section: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending, open]);
 
-  async function sendMessage(value = draft) {
+  async function sendMessage(value = draft, includeInHistory = true) {
     const question = value.trim();
     if (!question || sending) return;
 
-    const nextMessages: Message[] = [...messages, { role: "user", content: question }];
-    setMessages(nextMessages);
-    setDraft("");
+    const nextMessages: Message[] = includeInHistory
+      ? [...messages, { role: "user", content: question }]
+      : messages.slice(-10);
+    if (includeInHistory) setMessages(nextMessages);
+    if (includeInHistory) setDraft("");
     setError("");
     setSending(true);
     try {
@@ -146,7 +148,7 @@ export function AssistantWidget({ section }: { section: string }) {
             </div>
           )}
 
-          {error && <div role="alert" className="mx-3.5 mt-2 rounded-xl border border-[#edd4ce] bg-[#fbefeb] px-3 py-2 text-[10px] leading-4 text-[#a85543]">{error}<button type="button" onClick={() => void sendMessage(messages[messages.length - 1]?.content ?? "")} className="ml-2 font-bold underline">Reintentar</button></div>}
+          {error && <div role="alert" className="mx-3.5 mt-2 rounded-xl border border-[#edd4ce] bg-[#fbefeb] px-3 py-2 text-[10px] leading-4 text-[#a85543]">{error}<button type="button" onClick={() => void sendMessage(messages[messages.length - 1]?.content ?? "", false)} className="ml-2 font-bold underline">Reintentar</button></div>}
 
           <form onSubmit={handleSubmit} className="border-t border-line bg-white p-3">
             <div className="flex items-end gap-2 rounded-2xl border border-line bg-[#f8f8f4] p-2 focus-within:border-[#9db39f]">
