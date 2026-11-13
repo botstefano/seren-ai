@@ -24,12 +24,22 @@ type PendingOperation =
       after: OfferSnapshot;
       expiresInSeconds: number;
     };
+type CustomerMatch = {
+  customerKey: number;
+  customerCode: string;
+  name: string;
+  segment: string;
+  riskLevel: string;
+  totalPurchases: number;
+  lastPurchaseDate: string | null;
+};
 type ChatResponse = {
   answer: string;
   section: string;
   model: string;
   pendingOperation?: PendingOperation;
   copyText?: string;
+  customerMatches?: CustomerMatch[];
 };
 type ExecuteResponse = { message: string; action: Record<string, unknown> };
 
@@ -45,7 +55,7 @@ const sectionLabels: Record<string, string> = {
 
 const greetings: Record<string, string> = {
   overview: "Hola. Puedo ayudarte a interpretar los indicadores generales, entender las señales de riesgo y leer la evolucion de la retencion.",
-  customers: "Estas en Customers. Puedo explicarte los segmentos, la frecuencia de compra, los filtros y el alcance de esta cartera recurrente.",
+  customers: "Estas en Customers. Puedes preguntarme por un cliente escribiendo su nombre o codigo directamente; tambien puedo explicarte los segmentos y la frecuencia de compra.",
   churn: "Estas en Riesgo de churn. Selecciona una tarjeta con “Trabajar con Seren” y podre preparar ofertas, editar mensajes y gestionar la propuesta de ese cliente.",
   agent: "Estas en Agente Seren. Puedo explicarte los lotes de Groq, revisar una propuesta seleccionada y ayudarte a aprobarla.",
   campaigns: "Estas en Reactivaciones. Puedo ayudarte a interpretar los estados y gestionar la accion del cliente seleccionado.",
@@ -81,6 +91,7 @@ export function AssistantWidget({ section }: { section: string }) {
   const [selectedCustomerLabel, setSelectedCustomerLabel] = useState("");
   const [pendingOperation, setPendingOperation] = useState<PendingOperation | null>(null);
   const [copyText, setCopyText] = useState("");
+  const [customerMatches, setCustomerMatches] = useState<CustomerMatch[]>([]);
   const [copied, setCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -90,6 +101,7 @@ export function AssistantWidget({ section }: { section: string }) {
       previousSection.current = activeSection;
       setMessages([{ role: "assistant", content: greetings[activeSection] }]);
       setCopyText("");
+      setCustomerMatches([]);
       setError("");
     } else if (messages.length === 0) {
       setMessages([{ role: "assistant", content: greetings[activeSection] }]);
@@ -104,6 +116,7 @@ export function AssistantWidget({ section }: { section: string }) {
       setSelectedCustomerLabel(String(detail.customerLabel ?? "Cliente seleccionado"));
       setPendingOperation(null);
       setCopyText("");
+      setCustomerMatches([]);
       setError("");
       setOpen(true);
       setMessages([
@@ -130,6 +143,7 @@ export function AssistantWidget({ section }: { section: string }) {
     if (includeInHistory) setDraft("");
     setError("");
     setCopyText("");
+    setCustomerMatches([]);
     setCopied(false);
     setSending(true);
     try {
@@ -144,6 +158,7 @@ export function AssistantWidget({ section }: { section: string }) {
       setMessages((current) => [...current, { role: "assistant", content: result.answer }]);
       setPendingOperation(result.pendingOperation ?? null);
       setCopyText(result.copyText ?? "");
+      setCustomerMatches(result.customerMatches ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo consultar a Seren. Intentalo nuevamente.");
     } finally {
@@ -203,6 +218,7 @@ export function AssistantWidget({ section }: { section: string }) {
     setDraft("");
     setPendingOperation(null);
     setCopyText("");
+    setCustomerMatches([]);
     setMessages([{ role: "assistant", content: greetings[activeSection] }]);
   }
 
@@ -250,6 +266,34 @@ export function AssistantWidget({ section }: { section: string }) {
                 </div>
               </div>
             ))}
+
+            {customerMatches.length > 0 && (
+              <div className="ml-9 space-y-2 rounded-2xl border border-[#dce7dc] bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-forest">Clientes encontrados</p>
+                  <span className="rounded-full bg-[#edf3ed] px-2 py-1 text-[9px] font-bold text-forest">{customerMatches.length} coincidencia{customerMatches.length === 1 ? "" : "s"}</span>
+                </div>
+                {customerMatches.map((customer) => (
+                  <div key={customer.customerKey} className="rounded-xl border border-line bg-[#fbfcf9] p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-ink">{customer.name}</p>
+                      <p className="mt-0.5 text-[10px] text-muted">Código {customer.customerCode} · {customer.segment}</p>
+                      <p className="mt-1 text-[10px] text-muted">{customer.totalPurchases} compras · Riesgo {customer.riskLevel === "HIGH" ? "alto" : customer.riskLevel === "MEDIUM" ? "moderado" : customer.riskLevel === "LOW" ? "bajo" : "sin datos"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerMatches([]);
+                        window.dispatchEvent(new CustomEvent("seren:select-customer", { detail: { customerKey: customer.customerKey, customerLabel: customer.name } }));
+                      }}
+                      className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-forest px-3 py-2 text-[10px] font-bold text-white transition hover:bg-[#315b4b]"
+                    >
+                      <Check size={13} /> Usar este cliente
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {pendingOperation && (
               <div className="ml-9 overflow-hidden rounded-2xl border border-[#d6e2d6] bg-white shadow-sm">
@@ -334,7 +378,7 @@ export function AssistantWidget({ section }: { section: string }) {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={pendingOperation ? "Confirma o cancela la operacion..." : "Escribe tu pregunta..."}
+                placeholder={pendingOperation ? "Confirma o cancela la operacion..." : activeSection === "customers" && selectedCustomerKey === null ? "Pregunta o escribe el nombre/codigo del cliente..." : "Escribe tu pregunta..."}
                 aria-label="Escribe tu pregunta para Seren"
                 rows={1}
                 maxLength={1500}

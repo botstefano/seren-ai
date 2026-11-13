@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, SlidersHorizontal, Users } from "lucide-react";
+import { Search, SlidersHorizontal, Sparkles, Users } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
@@ -43,7 +43,7 @@ export function CustomersPage() {
       {error && <ErrorState message={error} onRetry={() => void load()} />}
       {!loading && !error && <div className="overflow-x-auto">
         <table className="data-table">
-          <thead><tr><th>Customer</th><th>Segmento</th><th>Frecuencia</th><th>Ultima compra</th><th>Intervalo habitual</th><th>Riesgo</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Segmento</th><th>Frecuencia</th><th>Ultima compra</th><th>Intervalo habitual</th><th>Riesgo</th><th>Asistente</th></tr></thead>
           <tbody>
             {items.map((customer) => <tr key={customer.usuarioKey}>
               <td><div className="font-semibold text-ink">{customer.name}</div><div className="mt-0.5 text-[10px] text-muted">ID {customer.customerCode}</div></td>
@@ -52,8 +52,9 @@ export function CustomersPage() {
               <td>{formatDate(customer.lastPurchaseDate)}</td>
               <td>{customer.expectedIntervalDays ? formatNumber(customer.expectedIntervalDays, 1) + " dias" : "Sin datos"}</td>
               <td><RiskBadge level={customer.riskLevel} /></td>
+              <td><button type="button" onClick={() => window.dispatchEvent(new CustomEvent("seren:select-customer", { detail: { customerKey: customer.usuarioKey, customerLabel: customer.name } }))} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#eaf0e9] px-2.5 py-2 text-[10px] font-bold text-forest transition hover:bg-[#dce8dc]"><Sparkles size={12} /> Trabajar con Seren</button></td>
             </tr>)}
-            {!items.length && <tr><td colSpan={6} className="py-12 text-center text-xs text-muted">No se encontraron Customers con esos filtros.</td></tr>}
+            {!items.length && <tr><td colSpan={7} className="py-12 text-center text-xs text-muted">No se encontraron Customers con esos filtros.</td></tr>}
           </tbody>
         </table>
       </div>}

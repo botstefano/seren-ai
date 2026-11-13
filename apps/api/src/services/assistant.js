@@ -157,9 +157,22 @@ const commonOfferProperties = {
 };
 
 function operationTools(selectedCustomer) {
-  if (!selectedCustomer) return [];
-  const tools = [];
-  if (selectedCustomer.canEditOffer) {
+  const tools = [{
+    type: "function",
+    function: {
+      name: "lookup_customer",
+      description: "Busca un cliente de la cartera Customers por nombre o codigo cuando el usuario pregunta por una persona concreta o quiere cambiar de cliente. No modifica datos. Si el usuario solo pregunta si puede consultar por un cliente, invitalo a escribir su nombre o codigo en vez de buscar.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          query: { type: "string", minLength: 2, maxLength: 100, description: "Nombre completo, parte distintiva del nombre o codigo del cliente mencionado por el usuario." },
+        },
+        required: ["query"],
+      },
+    },
+  }];
+  if (selectedCustomer?.canEditOffer) {
     tools.push({
       type: "function",
       function: {
@@ -168,7 +181,7 @@ function operationTools(selectedCustomer) {
         parameters: { type: "object", additionalProperties: false, properties: commonOfferProperties, required: ["offerTitle", "personalizedMessage", "discountPct"] },
       },
     });
-  } else if (selectedCustomer.canCreateOffer) {
+  } else if (selectedCustomer?.canCreateOffer) {
     tools.push({
       type: "function",
       function: {
@@ -179,7 +192,7 @@ function operationTools(selectedCustomer) {
     });
   }
 
-  if (selectedCustomer.availableStatuses?.length) {
+  if (selectedCustomer?.availableStatuses?.length) {
     tools.push({
       type: "function",
       function: {
@@ -196,7 +209,7 @@ function operationTools(selectedCustomer) {
       },
     });
   }
-  if (selectedCustomer.canCopyMessage) {
+  if (selectedCustomer?.canCopyMessage) {
     tools.push({
       type: "function",
       function: {
@@ -235,16 +248,20 @@ export async function answerAssistant({ section, messages, context }) {
     "Usa prepare_offer_create solo cuando no haya una oferta existente y el usuario pida preparar una nueva. El descuento por defecto es 10 por ciento, a menos que el usuario solicite otro. Nunca superes 30 por ciento.",
     "Usa prepare_status_change para aprobar, registrar contacto, registrar respuesta, marcar reactivado o descartar. Solo selecciona estados que aparecen como permitidos.",
     "Usa copy_offer_message cuando el usuario pida copiar o recuperar el mensaje actual. No cambies el texto.",
-    "Si no hay cliente seleccionado, pide seleccionar primero una tarjeta con el boton Trabajar con Seren. No inventes a que cliente se refiere el usuario.",
+    "El usuario puede consultar un cliente escribiendo directamente su nombre o codigo en el chat; no le exijas buscar manualmente una tarjeta.",
+    "Cuando el usuario mencione un cliente concreto o pida buscarlo, usa lookup_customer. Si pregunta de forma general si puede preguntar por alguien, responde que si y pide su nombre o codigo, sin llamar a la herramienta.",
+    "Si lookup_customer devuelve coincidencias, muestra los resultados para que el usuario elija. No supongas que dos personas con nombres parecidos son la misma.",
+    "Si ya hay un cliente seleccionado y el usuario menciona explicitamente otro nombre o codigo, usa lookup_customer para cambiar de contexto. Si no menciona otro cliente, entiende que sigue hablando del seleccionado.",
+    "Cuando haya un cliente seleccionado, usa customerActivity para responder sobre frecuencia, compras recurrentes, gasto recurrente, ticket promedio, ultima compra y compras recientes. No inventes fechas ni detalles que no esten en esos datos.",
     "No solicites ni expongas nombres, codigos, contrasenas, tokens o claves. El contexto del cliente no contiene identificadores personales.",
     "El indice de demora no es una probabilidad de churn y no existe un modelo de churn entrenado.",
     "El sistema no envia WhatsApp, correo ni SMS automaticamente. La accion de contacto solo registra que el equipo lo hizo externamente.",
     "No ejecutes SQL libre ni propongas acciones que no esten en las herramientas disponibles.",
     "Pantalla actual: " + page.title + ". " + page.guidance,
     "Contexto de la pantalla y del cliente seleccionado (sin nombres ni codigos): " + JSON.stringify(context),
-    tools.length
-      ? "Hay un cliente seleccionado. Puedes preparar operaciones usando solamente las herramientas adjuntas."
-      : "No hay herramientas operativas disponibles en este contexto. Responde consultas y explica como navegar a la funcion correspondiente.",
+    selectedCustomer
+      ? "Hay un cliente seleccionado. Puedes responder consultas sobre su perfil y preparar operaciones usando solamente las herramientas adjuntas."
+      : "No hay un cliente seleccionado. Puedes buscarlo por nombre o codigo con lookup_customer; no pidas que el usuario localice una tarjeta manualmente.",
   ].join("\n");
 
   const requestBody = {
@@ -287,7 +304,7 @@ export async function answerAssistant({ section, messages, context }) {
       error.status = 502;
       throw error;
     }
-    const allowedNames = new Set(["prepare_offer_update", "prepare_offer_create", "prepare_status_change", "copy_offer_message"]);
+    const allowedNames = new Set(["lookup_customer", "prepare_offer_update", "prepare_offer_create", "prepare_status_change", "copy_offer_message"]);
     if (!allowedNames.has(call.function.name)) {
       const error = new Error("Groq solicito una operacion que no esta permitida.");
       error.status = 502;
