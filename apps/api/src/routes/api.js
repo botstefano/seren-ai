@@ -60,6 +60,38 @@ function redactName(text, name) {
   return String(text).split(String(name)).join("[nombre]");
 }
 
+function normalizeCustomerLookup(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findCustomerMatches(customers, query) {
+  const normalizedQuery = normalizeCustomerLookup(query);
+  if (normalizedQuery.length < 2) return [];
+  return (customers ?? [])
+    .filter((customer) => {
+      const name = normalizeCustomerLookup(customer.name);
+      const code = normalizeCustomerLookup(customer.customerCode);
+      return name.includes(normalizedQuery) || code.includes(normalizedQuery);
+    })
+    .sort((a, b) => {
+      const score = (customer) => {
+        const name = normalizeCustomerLookup(customer.name);
+        const code = normalizeCustomerLookup(customer.customerCode);
+        if (code === normalizedQuery) return 4;
+        if (name === normalizedQuery) return 3;
+        if (name.startsWith(normalizedQuery)) return 2;
+        return 1;
+      };
+      return score(b) - score(a) || String(a.name).localeCompare(String(b.name));
+    })
+    .slice(0, 5);
+}
+
 function validateOfferArguments(args) {
   const offerTitle = String(args?.offerTitle ?? "").trim();
   const personalizedMessage = String(args?.personalizedMessage ?? "").trim();
@@ -218,6 +250,17 @@ router.post("/assistant/chat", async (req, res, next) => {
       const currentMessage = selectedAction
         ? redactName(selectedAction.personalized_message, customer.name).slice(0, 1200)
         : null;
+      const customerPurchases = analytics.purchases
+        .filter((purchase) => String(purchase.usuario_key) === String(selectedKey))
+        .sort((a, b) => String(a.tiempo_key).localeCompare(String(b.tiempo_key)));
+      const customerGrossSpend = customerPurchases.reduce(
+        (sum, purchase) => sum + Number(purchase.monto_bruto_compra ?? 0),
+        0
+      );
+      const recentPurchases = customerPurchases.slice(-5).reverse().map((purchase) => ({
+        amountPEN: Number(Number(purchase.monto_bruto_compra ?? 0).toFixed(2)),
+        daysSincePreviousPurchase: Number(purchase.dias_desde_compra_anterior ?? 0) || null,
+      }));
 
       selectedCustomerForModel = {
         selected: true,
@@ -228,6 +271,16 @@ router.post("/assistant/chat", async (req, res, next) => {
         overdueRatio: customer.overdueRatio,
         segment: customer.segment,
         favoriteProduct: customer.favoriteProduct?.name ?? null,
+        customerActivity: {
+          totalPurchases: customer.totalPurchases,
+          recurringPurchases: customerPurchases.length,
+          cumulativeSpendPEN: Number(customerGrossSpend.toFixed(2)),
+          averageTicketPEN: customerPurchases.length
+            ? Number((customerGrossSpend / customerPurchases.length).toFixed(2))
+            : null,
+          lastPurchaseDate: customer.lastPurchaseDate,
+          recentPurchases,
+        },
         hasOffer: Boolean(selectedAction),
         currentActionStatus: selectedAction?.status ?? null,
         currentOfferTitle: selectedAction ? redactName(selectedAction.offer_title, customer.name) : null,
@@ -255,9 +308,45 @@ router.post("/assistant/chat", async (req, res, next) => {
 
     if (result.operation) {
       const { name, arguments: args } = result.operation;
+
+      if (name === "lookup_customer") {
+        const query = String(args?.query ?? "").trim().slice(0, 100);
+        if (query.length < 2) {
+          return res.json({
+            answer: "Escribe al menos dos caracteres del nombre o codigo para buscar al cliente.",
+            section,
+            model: env.groqModel,
+          });
+        }
+        const matches = findCustomerMatches(analytics.customers, query);
+        if (!matches.length) {
+          return res.json({
+            answer: "No encontre coincidencias para “" + query + "” en la cartera Customers. Comprueba el nombre o codigo; esta busqueda incluye clientes con dos o mas compras.",
+            section,
+            model: env.groqModel,
+          });
+        }
+        return res.json({
+          answer: matches.length === 1
+            ? "He encontrado una coincidencia. Selecciona este cliente para que pueda revisar su informacion contigo."
+            : "He encontrado varias coincidencias. Elige al cliente correcto para continuar.",
+          section,
+          model: env.groqModel,
+          customerMatches: matches.map((customer) => ({
+            customerKey: Number(customer.usuarioKey),
+            customerCode: String(customer.customerCode),
+            name: String(customer.name),
+            segment: String(customer.segment),
+            riskLevel: String(customer.riskLevel),
+            totalPurchases: Number(customer.totalPurchases ?? 0),
+            lastPurchaseDate: customer.lastPurchaseDate ?? null,
+          })),
+        });
+      }
+
       const selected = selectedCustomerForOperation;
       if (!selected) return res.json({
-        answer: "Primero selecciona una tarjeta con el boton “Trabajar con Seren”. Asi podre asegurarme de operar sobre el cliente correcto.",
+        answer: "Para realizar esa operacion, primero identifica al cliente escribiendo su nombre o codigo, o selecciona una tarjeta con “Trabajar con Seren”.",
         section,
         model: env.groqModel,
       });
