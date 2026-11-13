@@ -77,7 +77,6 @@ export function AssistantWidget({ section }: { section: string }) {
     if (previousSection.current !== activeSection) {
       previousSection.current = activeSection;
       setMessages([{ role: "assistant", content: greetings[activeSection] }]);
-      setPendingOperation(null);
       setCopyText("");
       setError("");
     } else if (messages.length === 0) {
@@ -102,7 +101,7 @@ export function AssistantWidget({ section }: { section: string }) {
     };
     window.addEventListener("seren:select-customer", handleSelection);
     return () => window.removeEventListener("seren:select-customer", handleSelection);
-  }, []);
+  }, [activeSection]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
