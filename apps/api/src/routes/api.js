@@ -184,7 +184,7 @@ router.post("/assistant/chat", async (req, res, next) => {
       const latestAssessment = assessments?.[0] ?? null;
 
       let canCreateOffer = false;
-      if (!selectedAction && latestAssessment) {
+      if (!selectedAction && latestAssessment && ["HIGH", "MEDIUM"].includes(customer.riskLevel)) {
         const { data: latestRuns, error: latestRunError } = await supabase
           .schema("seren_ai")
           .from("agent_runs")
@@ -467,8 +467,8 @@ router.post("/assistant/execute", async (req, res, next) => {
         .eq("assessment_id", pending.assessmentId)
         .maybeSingle();
       if (assessmentError) throw assessmentError;
-      if (!assessment || String(assessment.usuario_key) !== String(pending.usuarioKey)) {
-        return res.status(409).json({ message: "La evaluacion del cliente ya no esta disponible. Ejecuta un nuevo analisis." });
+      if (!assessment || String(assessment.usuario_key) !== String(pending.usuarioKey) || !["HIGH", "MEDIUM"].includes(assessment.risk_level)) {
+        return res.status(409).json({ message: "La evaluacion del cliente ya no esta disponible o no corresponde a un cliente con riesgo moderado/alto." });
       }
 
       const { data: latestRuns, error: latestRunError } = await supabase.schema("seren_ai")
