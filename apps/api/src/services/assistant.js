@@ -109,7 +109,6 @@ export function buildAssistantContext(section, analytics, actionRows = []) {
       model: env.groqModel,
       activeBatchCount: activeBatch.length,
       activeBatchStatusCounts: countBy(activeBatch, "status"),
-      remainingAtRiskCandidates: Math.max(0, (kpis.highRisk ?? 0) + (kpis.mediumRisk ?? 0) - generatedActions.length),
       rules: [
         "hasta 20 clientes por lote",
         "solo recomendaciones validas generadas por Groq se guardan y muestran",
