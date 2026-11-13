@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, MessageSquareText, Search, UserCheck } from "lucide-react";
+import { CheckCircle2, Clock3, MessageSquareText, Search, Sparkles, UserCheck } from "lucide-react";
 import { api, formatDate, formatNumber } from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Panel } from "../components/ui/Panel";
@@ -87,7 +87,7 @@ export function CampaignsPage() {
           <span className="text-[10px] text-muted">{filteredActions.length} de {actions.length} acciones</span>
         </div>
         {filteredActions.length > 0 ? (
-          <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Oferta y mensaje</th><th>Descuento</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Oferta y mensaje</th><th>Descuento</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th><th>Asistente</th></tr></thead><tbody>
             {filteredActions.map((action) => {
               const person = names.get(String(action.usuario_key));
               const updated = action.reactivated_at ?? action.contacted_at ?? action.approved_at ?? action.created_at;
@@ -97,6 +97,7 @@ export function CampaignsPage() {
                 <td className="font-semibold text-forest">{Number(action.offer_discount_pct ?? 0)}%</td>
                 <td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td>
                 <td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td>
+                <td><button type="button" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-forest hover:underline" onClick={() => window.dispatchEvent(new CustomEvent("seren:select-customer", { detail: { customerKey: action.usuario_key, customerLabel: person?.name ?? "Cliente seleccionado" } }))}><Sparkles size={12} /> Seren</button></td>
               </tr>;
             })}
           </tbody></table></div>
