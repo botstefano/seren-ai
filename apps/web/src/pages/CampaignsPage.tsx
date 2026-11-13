@@ -7,8 +7,8 @@ import { ErrorState, LoadingState } from "../components/ui/Feedback";
 
 type Action = {
   action_id: string; usuario_key: number; status: string; offer_title: string;
-  personalized_message: string; created_at: string; approved_at?: string;
-  contacted_at?: string; reactivated_at?: string;
+  personalized_message: string; offer_discount_pct?: number; ai_generated?: boolean;
+  created_at: string; approved_at?: string; contacted_at?: string; reactivated_at?: string;
 };
 type Recommendation = { usuarioKey: number; name: string; customerCode: string };
 
@@ -87,11 +87,17 @@ export function CampaignsPage() {
           <span className="text-[10px] text-muted">{filteredActions.length} de {actions.length} acciones</span>
         </div>
         {filteredActions.length > 0 ? (
-          <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Accion recomendada</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Customer</th><th>Oferta y mensaje</th><th>Descuento</th><th>Estado</th><th>Creada</th><th>Ultimo avance</th></tr></thead><tbody>
             {filteredActions.map((action) => {
               const person = names.get(String(action.usuario_key));
               const updated = action.reactivated_at ?? action.contacted_at ?? action.approved_at ?? action.created_at;
-              return <tr key={action.action_id}><td><div className="font-semibold text-ink">{person?.name ?? "Customer #" + action.usuario_key}</div><div className="text-[10px] text-muted">{person?.customerCode ?? ""}</div></td><td>{action.offer_title}</td><td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td><td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td></tr>;
+              return <tr key={action.action_id}>
+                <td><div className="font-semibold text-ink">{person?.name ?? "Customer #" + action.usuario_key}</div><div className="text-[10px] text-muted">{person?.customerCode ?? ""}</div></td>
+                <td><div className="max-w-[360px] font-semibold text-ink">{action.offer_title}</div><p className="mt-1 max-w-[360px] text-[10px] leading-4 text-muted">{action.personalized_message}</p></td>
+                <td className="font-semibold text-forest">{Number(action.offer_discount_pct ?? 0)}%</td>
+                <td><span className={"rounded-full px-2.5 py-1 text-[10px] font-bold " + (styles[action.status] ?? styles.proposed)}>{labels[action.status] ?? action.status}</span></td>
+                <td>{formatDate(action.created_at)}</td><td>{formatDate(updated)}</td>
+              </tr>;
             })}
           </tbody></table></div>
         ) : (
