@@ -72,8 +72,15 @@ export function AssistantWidget({ section }: { section: string }) {
   const [copied, setCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  const previousSection = useRef(activeSection);
   useEffect(() => {
-    if (messages.length === 0) {
+    if (previousSection.current !== activeSection) {
+      previousSection.current = activeSection;
+      setMessages([{ role: "assistant", content: greetings[activeSection] }]);
+      setPendingOperation(null);
+      setCopyText("");
+      setError("");
+    } else if (messages.length === 0) {
       setMessages([{ role: "assistant", content: greetings[activeSection] }]);
     }
   }, [activeSection, messages.length]);
@@ -88,8 +95,8 @@ export function AssistantWidget({ section }: { section: string }) {
       setCopyText("");
       setError("");
       setOpen(true);
-      setMessages((current) => [
-        ...current,
+      setMessages([
+        { role: "assistant", content: greetings[activeSection] },
         { role: "assistant", content: "He seleccionado " + String(detail.customerLabel ?? "el cliente") + ". Ahora puedes pedirme que prepare una oferta, edite su mensaje, copie la propuesta o gestione su estado. No guardaré cambios sin tu confirmación." },
       ]);
     };
