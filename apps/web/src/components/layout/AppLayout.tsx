@@ -4,6 +4,7 @@ import {
   LogOut, MessageSquareText, Settings2, Sparkles, Users,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { AssistantWidget } from "./AssistantWidget";
 
 const navigation = [
   { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
@@ -28,6 +29,15 @@ export function AppLayout() {
   const location = useLocation();
   const email = session?.user.email ?? "Usuario";
   const firstName = String(session?.user.user_metadata?.full_name ?? email.split("@")[0]).split(" ")[0];
+  const assistantSection = ({
+    "/": "overview",
+    "/customers": "customers",
+    "/churn": "churn",
+    "/agent": "agent",
+    "/campaigns": "campaigns",
+    "/reports": "reports",
+    "/settings": "settings",
+  } as Record<string, string>)[location.pathname] ?? "overview";
 
   return (
     <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
@@ -95,6 +105,7 @@ export function AppLayout() {
         <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-10"><Outlet /></div>
         <footer className="px-5 pb-7 text-center text-[10px] text-muted sm:px-8">Seren AI · Inteligencia de retencion proactiva · Origen Spa</footer>
       </main>
+      <AssistantWidget section={assistantSection} />
     </div>
   );
 }
