@@ -1,17 +1,20 @@
 import { FormEvent, useState } from "react";
-import { Activity, ArrowRight, LockKeyhole, Mail, Sparkles } from "lucide-react";
-import { Navigate } from "react-router-dom";
+import { Activity, ArrowLeft, ArrowRight, LockKeyhole, Mail, Sparkles } from "lucide-react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabaseConfigured } from "../lib/supabase";
 
 export function LoginPage() {
   const { session, signIn, loading } = useAuth();
+  const location = useLocation();
+  const requestedPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+  const destination = requestedPath?.startsWith("/staff") ? requestedPath : "/staff";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  if (!loading && session) return <Navigate to="/" replace />;
+  if (!loading && session) return <Navigate to={destination} replace />;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -37,24 +40,27 @@ export function LoginPage() {
             <div><p className="font-display text-xl font-extrabold">seren<span className="text-[#d3b17e]">.</span></p><p className="text-[9px] uppercase tracking-[0.2em] text-white/45">Intelligence for care</p></div>
           </div>
           <div className="relative z-10 max-w-xl">
-            <p className="mb-5 text-[10px] font-bold uppercase tracking-[0.24em] text-[#d7ba8e]">Customer retention intelligence</p>
+            <p className="mb-5 text-[10px] font-bold uppercase tracking-[0.24em] text-[#d7ba8e]">Acceso privado · Solo staff</p>
             <h1 className="font-display text-5xl font-semibold leading-[1.12] tracking-tight xl:text-[58px]">Cada regreso empieza con una <span className="serif-italic text-[#d7ba8e]">señal.</span></h1>
-            <p className="mt-7 max-w-md text-sm leading-7 text-white/60">Anticipa el abandono, comprende los habitos de tus clientes y convierte los datos en experiencias que invitan a volver.</p>
+            <p className="mt-7 max-w-md text-sm leading-7 text-white/60">Accede al espacio de trabajo de Origen Spa para comprender a tus clientes, anticipar el abandono y gestionar acciones de retencion.</p>
             <div className="mt-11 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d7e5d8] text-forest"><Activity size={19} /></div>
-              <div><p className="text-xs font-semibold">Inteligencia de retencion proactiva</p><p className="mt-1 text-[10px] text-white/45">Origen Spa · Fase Customers</p></div>
+              <div><p className="text-xs font-semibold">Inteligencia de retencion proactiva</p><p className="mt-1 text-[10px] text-white/45">Origen Spa · Espacio del personal</p></div>
             </div>
           </div>
           <p className="relative z-10 text-[10px] text-white/35">SEREN AI · ORIGEN SPA · 2026</p>
         </section>
         <section className="flex items-center justify-center px-6 py-12 sm:px-10">
           <div className="w-full max-w-[390px]">
-            <div className="mb-10 flex items-center gap-3 lg:hidden">
+            <Link to="/" className="mb-10 inline-flex items-center gap-2 text-[11px] font-semibold text-[#657168] transition hover:text-[#203d34]">
+              <ArrowLeft size={14} /> Volver a Origen Spa
+            </Link>
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="brand-mark"><Sparkles size={18} /></div><span className="font-display text-xl font-extrabold text-ink">seren<span className="text-gold">.</span></span>
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-forest/65">Bienvenido de nuevo</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-forest/65">Acceso exclusivo del personal</p>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-ink">Inicia sesion</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">Accede al centro de inteligencia y retencion de Origen Spa.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">Ingresa con tu cuenta autorizada para acceder al sistema interno de Origen Spa.</p>
 
             {!supabaseConfigured && <div className="mt-6 rounded-xl border border-[#e9d8b7] bg-[#fbf6e9] p-4 text-xs leading-5 text-[#80633b]">Falta configurar <b>VITE_SUPABASE_URL</b> y <b>VITE_SUPABASE_ANON_KEY</b> en el entorno del frontend.</div>}
 
