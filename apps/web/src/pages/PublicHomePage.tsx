@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Flower2,
   HeartHandshake,
+  HandHeart,
   Leaf,
   ShieldCheck,
   Sparkles,
@@ -35,6 +36,7 @@ export function PublicHomePage() {
           <nav className="hidden items-center gap-8 md:flex" aria-label="Navegación principal">
             <a href="#inicio" className="text-[11px] font-semibold text-[#53635a] transition hover:text-[#b28d59]">Inicio</a>
             <a href="#servicios" className="text-[11px] font-semibold text-[#53635a] transition hover:text-[#b28d59]">Servicios</a>
+            <a href="#mi-experiencia" className="text-[11px] font-semibold text-[#53635a] transition hover:text-[#b28d59]">Mi experiencia</a>
             <a href="#experiencia" className="text-[11px] font-semibold text-[#53635a] transition hover:text-[#b28d59]">Nuestra esencia</a>
           </nav>
 
@@ -68,8 +70,8 @@ export function PublicHomePage() {
                 <a href="#servicios" className="inline-flex items-center gap-3 rounded-full bg-[#203d34] px-6 py-3.5 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(32,61,52,.17)] transition hover:-translate-y-0.5 hover:bg-[#315649]">
                   Explorar servicios <ArrowRight size={15} />
                 </a>
-                <a href="#experiencia" className="inline-flex items-center gap-2 rounded-full px-5 py-3.5 text-[11px] font-bold text-[#53635a] transition hover:bg-white/70">
-                  Conoce Origen Spa <ArrowUpRight size={14} />
+                <a href="#mi-experiencia" className="inline-flex items-center gap-2 rounded-full px-5 py-3.5 text-[11px] font-bold text-[#53635a] transition hover:bg-white/70">
+                  Estoy en Origen Spa <HandHeart size={14} />
                 </a>
               </div>
               <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-[#dfe1d8] pt-7">
@@ -122,6 +124,31 @@ export function PublicHomePage() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section id="mi-experiencia" className="scroll-mt-24 bg-[#e9eee7] px-5 py-16 sm:px-8 lg:px-12 lg:py-20">
+          <div className="mx-auto grid max-w-[1180px] items-center gap-8 rounded-[30px] border border-white/80 bg-[#f9faf6] p-7 shadow-[0_18px_50px_rgba(32,61,52,.06)] sm:p-10 lg:grid-cols-[1fr_auto] lg:gap-12 lg:p-12">
+            <div className="max-w-[680px]">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#e9f0e8] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-[#52705e]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#7d9b83]" />
+                Para quienes ya están en el spa
+              </div>
+              <h2 className="mt-5 font-display text-3xl font-semibold tracking-tight text-[#203d34] sm:text-4xl">Tu momento también tiene su espacio.</h2>
+              <p className="mt-4 text-[12px] leading-7 text-[#6d796f] sm:text-[13px]">
+                Mientras recibes tu atención, utiliza esta experiencia desde tu celular para comunicar una preferencia al profesional o tomarte una pausa guiada de un minuto.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[10px] font-semibold text-[#627267]">
+                <span className="inline-flex items-center gap-1.5"><HandHeart size={14} className="text-[#a88a5c]" /> Comunica cómo te sientes</span>
+                <span className="inline-flex items-center gap-1.5"><Sparkles size={14} className="text-[#a88a5c]" /> Tómate un momento de calma</span>
+              </div>
+            </div>
+            <Link to="/experiencia" className="inline-flex items-center justify-center gap-3 rounded-full bg-[#203d34] px-7 py-4 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(32,61,52,.15)] transition hover:-translate-y-0.5 hover:bg-[#315649]">
+              Abrir mi experiencia <ArrowRight size={15} />
+            </Link>
+          </div>
+          <p className="mx-auto mt-4 max-w-[1180px] text-center text-[9px] text-[#7d887e]">
+            No necesitas registrarte ni realizar una compra para usar esta función.
+          </p>
         </section>
 
         <section id="servicios" className="scroll-mt-24 bg-[#fbfaf6] px-5 py-20 sm:px-8 lg:px-12 lg:py-24">

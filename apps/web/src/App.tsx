@@ -4,6 +4,7 @@ import { LoadingState } from "./components/ui/Feedback";
 import { useAuth } from "./context/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { PublicHomePage } from "./pages/PublicHomePage";
+import { InSpaExperiencePage } from "./pages/InSpaExperiencePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { ChurnPage } from "./pages/ChurnPage";
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicHomePage />} />
+      <Route path="/experiencia" element={<InSpaExperiencePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/staff"
