@@ -172,7 +172,7 @@ function operationTools(selectedCustomer) {
       },
     },
   }];
-  if (selectedCustomer.canEditOffer) {
+  if (selectedCustomer?.canEditOffer) {
     tools.push({
       type: "function",
       function: {
@@ -181,7 +181,7 @@ function operationTools(selectedCustomer) {
         parameters: { type: "object", additionalProperties: false, properties: commonOfferProperties, required: ["offerTitle", "personalizedMessage", "discountPct"] },
       },
     });
-  } else if (selectedCustomer.canCreateOffer) {
+  } else if (selectedCustomer?.canCreateOffer) {
     tools.push({
       type: "function",
       function: {
@@ -192,7 +192,7 @@ function operationTools(selectedCustomer) {
     });
   }
 
-  if (selectedCustomer.availableStatuses?.length) {
+  if (selectedCustomer?.availableStatuses?.length) {
     tools.push({
       type: "function",
       function: {
@@ -209,7 +209,7 @@ function operationTools(selectedCustomer) {
       },
     });
   }
-  if (selectedCustomer.canCopyMessage) {
+  if (selectedCustomer?.canCopyMessage) {
     tools.push({
       type: "function",
       function: {
@@ -258,9 +258,9 @@ export async function answerAssistant({ section, messages, context }) {
     "No ejecutes SQL libre ni propongas acciones que no esten en las herramientas disponibles.",
     "Pantalla actual: " + page.title + ". " + page.guidance,
     "Contexto de la pantalla y del cliente seleccionado (sin nombres ni codigos): " + JSON.stringify(context),
-    tools.length
-      ? "Hay un cliente seleccionado. Puedes preparar operaciones usando solamente las herramientas adjuntas."
-      : "No hay herramientas operativas disponibles en este contexto. Responde consultas y explica como navegar a la funcion correspondiente.",
+    selectedCustomer
+      ? "Hay un cliente seleccionado. Puedes responder consultas sobre su perfil y preparar operaciones usando solamente las herramientas adjuntas."
+      : "No hay un cliente seleccionado. Puedes buscarlo por nombre o codigo con lookup_customer; no pidas que el usuario localice una tarjeta manualmente.",
   ].join("\n");
 
   const requestBody = {
