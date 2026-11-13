@@ -274,7 +274,7 @@ router.post("/assistant/chat", async (req, res, next) => {
         customerActivity: {
           totalPurchases: customer.totalPurchases,
           recurringPurchases: customerPurchases.length,
-          cumulativeSpendPEN: Number(customerGrossSpend.toFixed(2)),
+          recurringSpendPEN: Number(customerGrossSpend.toFixed(2)),
           averageTicketPEN: customerPurchases.length
             ? Number((customerGrossSpend / customerPurchases.length).toFixed(2))
             : null,
