@@ -157,8 +157,21 @@ const commonOfferProperties = {
 };
 
 function operationTools(selectedCustomer) {
-  if (!selectedCustomer) return [];
-  const tools = [];
+  const tools = [{
+    type: "function",
+    function: {
+      name: "lookup_customer",
+      description: "Busca un cliente de la cartera Customers por nombre o codigo cuando el usuario pregunta por una persona concreta o quiere cambiar de cliente. No modifica datos. Si el usuario solo pregunta si puede consultar por un cliente, invitalo a escribir su nombre o codigo en vez de buscar.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          query: { type: "string", minLength: 2, maxLength: 100, description: "Nombre completo, parte distintiva del nombre o codigo del cliente mencionado por el usuario." },
+        },
+        required: ["query"],
+      },
+    },
+  }];
   if (selectedCustomer.canEditOffer) {
     tools.push({
       type: "function",
@@ -235,7 +248,10 @@ export async function answerAssistant({ section, messages, context }) {
     "Usa prepare_offer_create solo cuando no haya una oferta existente y el usuario pida preparar una nueva. El descuento por defecto es 10 por ciento, a menos que el usuario solicite otro. Nunca superes 30 por ciento.",
     "Usa prepare_status_change para aprobar, registrar contacto, registrar respuesta, marcar reactivado o descartar. Solo selecciona estados que aparecen como permitidos.",
     "Usa copy_offer_message cuando el usuario pida copiar o recuperar el mensaje actual. No cambies el texto.",
-    "Si no hay cliente seleccionado, pide seleccionar primero una tarjeta con el boton Trabajar con Seren. No inventes a que cliente se refiere el usuario.",
+    "El usuario puede consultar un cliente escribiendo directamente su nombre o codigo en el chat; no le exijas buscar manualmente una tarjeta.",
+    "Cuando el usuario mencione un cliente concreto o pida buscarlo, usa lookup_customer. Si pregunta de forma general si puede preguntar por alguien, responde que si y pide su nombre o codigo, sin llamar a la herramienta.",
+    "Si lookup_customer devuelve coincidencias, muestra los resultados para que el usuario elija. No supongas que dos personas con nombres parecidos son la misma.",
+    "Si ya hay un cliente seleccionado y el usuario menciona explicitamente otro nombre o codigo, usa lookup_customer para cambiar de contexto. Si no menciona otro cliente, entiende que sigue hablando del seleccionado.",
     "No solicites ni expongas nombres, codigos, contrasenas, tokens o claves. El contexto del cliente no contiene identificadores personales.",
     "El indice de demora no es una probabilidad de churn y no existe un modelo de churn entrenado.",
     "El sistema no envia WhatsApp, correo ni SMS automaticamente. La accion de contacto solo registra que el equipo lo hizo externamente.",
@@ -287,7 +303,7 @@ export async function answerAssistant({ section, messages, context }) {
       error.status = 502;
       throw error;
     }
-    const allowedNames = new Set(["prepare_offer_update", "prepare_offer_create", "prepare_status_change", "copy_offer_message"]);
+    const allowedNames = new Set(["lookup_customer", "prepare_offer_update", "prepare_offer_create", "prepare_status_change", "copy_offer_message"]);
     if (!allowedNames.has(call.function.name)) {
       const error = new Error("Groq solicito una operacion que no esta permitida.");
       error.status = 502;
