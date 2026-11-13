@@ -252,6 +252,7 @@ export async function answerAssistant({ section, messages, context }) {
     "Cuando el usuario mencione un cliente concreto o pida buscarlo, usa lookup_customer. Si pregunta de forma general si puede preguntar por alguien, responde que si y pide su nombre o codigo, sin llamar a la herramienta.",
     "Si lookup_customer devuelve coincidencias, muestra los resultados para que el usuario elija. No supongas que dos personas con nombres parecidos son la misma.",
     "Si ya hay un cliente seleccionado y el usuario menciona explicitamente otro nombre o codigo, usa lookup_customer para cambiar de contexto. Si no menciona otro cliente, entiende que sigue hablando del seleccionado.",
+    "Cuando haya un cliente seleccionado, usa customerActivity para responder sobre frecuencia, compras recurrentes, gasto recurrente, ticket promedio, ultima compra y compras recientes. No inventes fechas ni detalles que no esten en esos datos.",
     "No solicites ni expongas nombres, codigos, contrasenas, tokens o claves. El contexto del cliente no contiene identificadores personales.",
     "El indice de demora no es una probabilidad de churn y no existe un modelo de churn entrenado.",
     "El sistema no envia WhatsApp, correo ni SMS automaticamente. La accion de contacto solo registra que el equipo lo hizo externamente.",
