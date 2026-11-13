@@ -3,15 +3,26 @@ import { Bot, Check, Clipboard, LoaderCircle, MessageCircle, RotateCcw, Send, Sh
 import { api } from "../../lib/api";
 
 type Message = { role: "user" | "assistant"; content: string };
-type PendingOperation = {
-  proposalId: string;
-  type: "status" | "update_offer" | "create_offer";
-  title: string;
-  summary: string;
-  before: null | string | { offerTitle: string; personalizedMessage: string; discountPct: number };
-  after: string | { offerTitle: string; personalizedMessage: string; discountPct: number };
-  expiresInSeconds: number;
-};
+type OfferSnapshot = { offerTitle: string; personalizedMessage: string; discountPct: number };
+type PendingOperation =
+  | {
+      proposalId: string;
+      type: "status";
+      title: string;
+      summary: string;
+      before: string;
+      after: string;
+      expiresInSeconds: number;
+    }
+  | {
+      proposalId: string;
+      type: "update_offer" | "create_offer";
+      title: string;
+      summary: string;
+      before: null | OfferSnapshot;
+      after: OfferSnapshot;
+      expiresInSeconds: number;
+    };
 type ChatResponse = {
   answer: string;
   section: string;
