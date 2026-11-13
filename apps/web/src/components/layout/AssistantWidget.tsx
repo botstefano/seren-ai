@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Bot, Check, Clipboard, LoaderCircle, MessageCircle, RotateCcw, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { api } from "../../lib/api";
+import { AssistantMessage } from "./AssistantMessage";
 
 type Message = { role: "user" | "assistant"; content: string };
 type OfferSnapshot = { offerTitle: string; personalizedMessage: string; discountPct: number };
@@ -245,7 +246,7 @@ export function AssistantWidget({ section }: { section: string }) {
               <div key={index} className={"flex " + (message.role === "user" ? "justify-end" : "justify-start")}>
                 {message.role === "assistant" && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[#e9f0e9] text-forest"><Bot size={15} /></div>}
                 <div className={"max-w-[86%] rounded-2xl px-3.5 py-3 text-xs leading-5 " + (message.role === "user" ? "rounded-br-md bg-[#23483d] text-white" : "rounded-bl-md border border-line bg-white text-ink shadow-sm")}>
-                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  <div className="break-words"><AssistantMessage content={message.content} /></div>
                 </div>
               </div>
             ))}
