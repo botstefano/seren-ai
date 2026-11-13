@@ -8,19 +8,19 @@ type Block =
   | { type: "rule" };
 
 function parseRow(line: string): string[] {
-  return line.trim().replace(/^\\|/, "").replace(/\\|$/, "").split("|").map((cell) => cell.trim());
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
 }
 
 function isTableSeparator(line: string): boolean {
-  return /^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(line);
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
 }
 
 function isListItem(line: string): boolean {
-  return /^\\s*(?:[-*•]|\\d+[.)])\\s+/.test(line);
+  return /^\s*(?:[-*•]|\d+[.)])\s+/.test(line);
 }
 
 function parseBlocks(content: string): Block[] {
-  const lines = content.replace(/\\r/g, "").split("\\n");
+  const lines = content.replace(/\r/g, "").split("\n");
   const blocks: Block[] = [];
   let index = 0;
 
@@ -43,24 +43,24 @@ function parseBlocks(content: string): Block[] {
       continue;
     }
 
-    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
       index += 1;
       continue;
     }
 
-    if (/^(?:---+|\\*\\*\\*+|___+)$/.test(line)) {
+    if (/^(?:---+|\*\*\*+|___+)$/.test(line)) {
       blocks.push({ type: "rule" });
       index += 1;
       continue;
     }
 
     if (isListItem(line)) {
-      const ordered = /^\\s*\\d+[.)]\\s+/.test(line);
+      const ordered = /^\s*\d+[.)]\s+/.test(line);
       const items: string[] = [];
       while (index < lines.length && isListItem(lines[index])) {
-        items.push(lines[index].replace(/^\\s*(?:[-*•]|\\d+[.)])\\s+/, "").trim());
+        items.push(lines[index].replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim());
         index += 1;
       }
       blocks.push({ type: "list", ordered, items });
@@ -71,7 +71,7 @@ function parseBlocks(content: string): Block[] {
     index += 1;
     while (index < lines.length && lines[index].trim()) {
       const next = lines[index].trim();
-      if (/^#{1,3}\\s+/.test(next) || /^(?:---+|\\*\\*\\*+|___+)$/.test(next) || isListItem(next)) break;
+      if (/^#{1,3}\s+/.test(next) || /^(?:---+|\*\*\*+|___+)$/.test(next) || isListItem(next)) break;
       if (index + 1 < lines.length && next.includes("|") && isTableSeparator(lines[index + 1])) break;
       paragraph.push(next);
       index += 1;
@@ -83,7 +83,7 @@ function parseBlocks(content: string): Block[] {
 }
 
 function inlineMarkdown(value: string): ReactNode[] {
-  const tokens = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*|`[^`]+`)/g).filter(Boolean);
+  const tokens = value.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter(Boolean);
   return tokens.map((token, index) => {
     if (token.startsWith("**") && token.endsWith("**")) {
       return <strong key={index} className="font-semibold text-[#23483d]">{token.slice(2, -2)}</strong>;
@@ -91,18 +91,15 @@ function inlineMarkdown(value: string): ReactNode[] {
     if (token.startsWith("*") && token.endsWith("*")) {
       return <em key={index} className="italic">{token.slice(1, -1)}</em>;
     }
-    if (token.startsWith("`") && token.endsWith("`")) {
-      return <code key={index} className="rounded bg-[#f0f3ee] px-1 py-0.5 font-mono text-[0.92em] text-[#315b4b]">{token.slice(1, -1)}</code>;
-    }
     return <span key={index}>{token}</span>;
   });
 }
 
 function CellContent({ value }: { value: string }) {
   const lines = value
-    .replace(/<br\\s*\\/?\s*>/gi, "\\n")
-    .split("\\n")
-    .map((line) => line.trim().replace(/^(?:[-*•]|\\d+[.)])\\s+/, ""))
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .split("\n")
+    .map((line) => line.trim().replace(/^(?:[-*•]|\d+[.)])\s+/, ""))
     .filter(Boolean);
 
   if (lines.length > 1) {
