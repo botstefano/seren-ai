@@ -34,12 +34,90 @@ router.get("/me", (req, res) => {
 const assistantRequests = new Map();
 const ASSISTANT_SECTIONS = new Set(["overview", "customers", "churn", "agent", "campaigns", "reports", "settings"]);
 
+const pendingAssistantOperations = new Map();
+const ACTION_TRANSITIONS = {
+  proposed: ["approved", "dismissed"],
+  approved: ["contacted", "dismissed"],
+  contacted: ["responded", "reactivated", "dismissed"],
+  responded: ["reactivated", "dismissed"],
+};
+const STATUS_LABELS = {
+  proposed: "propuesta",
+  approved: "aprobada",
+  contacted: "contacto registrado",
+  responded: "respuesta registrada",
+  reactivated: "reactivado",
+  dismissed: "descartada",
+};
+
+function appendAssistantAudit(notes, userId, operation) {
+  const entry = "[" + new Date().toISOString() + "] Seren AI assistant | user:" + userId + " | " + operation;
+  return [String(notes ?? "").trim(), entry].filter(Boolean).join("\n").slice(-6000);
+}
+
+function redactName(text, name) {
+  if (!text || !name) return String(text ?? "");
+  return String(text).split(String(name)).join("[nombre]");
+}
+
+function validateOfferArguments(args) {
+  const offerTitle = String(args?.offerTitle ?? "").trim();
+  const personalizedMessage = String(args?.personalizedMessage ?? "").trim();
+  const discountPct = Number(args?.discountPct);
+  if (offerTitle.length < 3 || offerTitle.length > 180) {
+    const error = new Error("El titulo debe tener entre 3 y 180 caracteres.");
+    error.status = 400;
+    throw error;
+  }
+  if (personalizedMessage.length < 10 || personalizedMessage.length > 1200) {
+    const error = new Error("El mensaje debe tener entre 10 y 1,200 caracteres.");
+    error.status = 400;
+    throw error;
+  }
+  if (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 30) {
+    const error = new Error("El descuento debe estar entre 0% y 30%.");
+    error.status = 400;
+    throw error;
+  }
+  const percentages = [...(offerTitle + " " + personalizedMessage).matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)]
+    .map((match) => Number(match[1].replace(",", ".")));
+  if (percentages.some((value) => value !== discountPct)) {
+    const error = new Error("El porcentaje mencionado en el texto debe coincidir con el descuento configurado (" + discountPct + "%).");
+    error.status = 400;
+    throw error;
+  }
+  return { offerTitle, personalizedMessage, discountPct };
+}
+
+function cleanExpiredAssistantOperations() {
+  const now = Date.now();
+  for (const [id, item] of pendingAssistantOperations) {
+    if (item.expiresAt <= now) pendingAssistantOperations.delete(id);
+  }
+  while (pendingAssistantOperations.size > 500) {
+    const oldest = pendingAssistantOperations.keys().next().value;
+    if (!oldest) break;
+    pendingAssistantOperations.delete(oldest);
+  }
+}
+
+async function hasPendingLatestBatch(assessmentRows, actionRows) {
+  const ids = new Set((assessmentRows ?? []).map((item) => String(item.assessment_id)));
+  const runActions = (actionRows ?? []).filter((item) =>
+    item.ai_generated && ids.has(String(item.assessment_id))
+  );
+  if (!runActions.length) return false;
+  const batchTimes = [...new Set(runActions.map((item) => item.created_at))].sort();
+  const currentTime = batchTimes[batchTimes.length - 1];
+  return runActions.some((item) => item.created_at === currentTime && item.status === "proposed");
+}
+
 router.post("/assistant/chat", async (req, res, next) => {
   try {
     const section = String(req.body?.section ?? "overview");
     const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     if (!ASSISTANT_SECTIONS.has(section)) {
-      return res.status(400).json({ message: "La pestaña indicada no es valida." });
+      return res.status(400).json({ message: "La pestana indicada no es valida." });
     }
 
     const messages = rawMessages.slice(-10)
@@ -53,7 +131,6 @@ router.post("/assistant/chat", async (req, res, next) => {
       return res.status(400).json({ message: "La pregunta supera el limite de 1,500 caracteres." });
     }
 
-    // Small per-user in-memory limit to prevent accidental repeated Groq calls.
     const now = Date.now();
     const userKey = String(req.user.id);
     const usage = assistantRequests.get(userKey) ?? { windowStartedAt: now, count: 0 };
@@ -68,18 +145,383 @@ router.post("/assistant/chat", async (req, res, next) => {
     assistantRequests.set(userKey, usage);
 
     const analytics = await loadAnalytics();
-    let actionRows = [];
-    const { data: actions, error: actionsError } = await supabase
+    const { data: actionRows, error: actionsError } = await supabase
       .schema("seren_ai")
       .from("reactivation_actions")
-      .select("status,ai_generated,created_at")
+      .select("assessment_id,usuario_key,status,ai_generated,created_at")
       .order("created_at", { ascending: false })
-      .limit(2000);
-    if (!actionsError && actions) actionRows = actions;
+      .range(0, 4999);
+    if (actionsError) throw actionsError;
 
-    const context = buildAssistantContext(section, analytics, actionRows);
-    const answer = await answerAssistant({ section, messages, context });
-    res.json({ answer, section, model: env.groqModel });
+    const selectedRaw = req.body?.selectedCustomerKey;
+    const selectedKey = Number(selectedRaw);
+    const hasSelectedKey = selectedRaw !== null && selectedRaw !== undefined && Number.isInteger(selectedKey) && selectedKey > 0;
+    let selectedCustomerForModel = null;
+    let selectedCustomerForOperation = null;
+
+    if (hasSelectedKey) {
+      const customer = analytics.customers.find((item) => Number(item.usuarioKey) === selectedKey);
+      if (!customer) return res.status(404).json({ message: "El cliente seleccionado ya no esta disponible en la cartera." });
+
+      const { data: actionRowsForCustomer, error: selectedActionError } = await supabase
+        .schema("seren_ai")
+        .from("reactivation_actions")
+        .select("action_id,assessment_id,usuario_key,status,offer_title,personalized_message,offer_discount_pct,ai_generated,updated_at,notes")
+        .eq("usuario_key", selectedKey)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (selectedActionError) throw selectedActionError;
+      const selectedAction = actionRowsForCustomer?.[0] ?? null;
+
+      const { data: assessments, error: selectedAssessmentError } = await supabase
+        .schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id,usuario_key,risk_level,favorite_product_key")
+        .eq("usuario_key", selectedKey)
+        .order("assessed_at", { ascending: false })
+        .limit(1);
+      if (selectedAssessmentError) throw selectedAssessmentError;
+      const latestAssessment = assessments?.[0] ?? null;
+
+      let canCreateOffer = false;
+      if (!selectedAction && latestAssessment) {
+        const { data: latestRuns, error: latestRunError } = await supabase
+          .schema("seren_ai")
+          .from("agent_runs")
+          .select("run_id,status")
+          .order("started_at", { ascending: false })
+          .limit(1);
+        if (latestRunError) throw latestRunError;
+        const latestRun = latestRuns?.[0];
+        if (latestRun?.status === "completed") {
+          const { data: latestRunAssessments, error: latestRunAssessmentError } = await supabase
+            .schema("seren_ai")
+            .from("churn_assessments")
+            .select("assessment_id")
+            .eq("run_id", latestRun.run_id)
+            .range(0, 4999);
+          if (latestRunAssessmentError) throw latestRunAssessmentError;
+          const pending = await hasPendingLatestBatch(latestRunAssessments, actionRows ?? []);
+          canCreateOffer = !pending;
+        }
+      }
+
+      const canEditOffer = Boolean(selectedAction?.ai_generated) &&
+        ["proposed", "approved"].includes(selectedAction.status);
+      const availableStatuses = selectedAction
+        ? (ACTION_TRANSITIONS[selectedAction.status] ?? [])
+        : [];
+      const canCopyMessage = Boolean(selectedAction?.ai_generated && selectedAction.personalized_message);
+      const currentMessage = selectedAction
+        ? redactName(selectedAction.personalized_message, customer.name).slice(0, 1200)
+        : null;
+
+      selectedCustomerForModel = {
+        selected: true,
+        riskLevel: customer.riskLevel,
+        riskScore: customer.riskScore,
+        daysSinceLastPurchase: customer.daysSinceLastPurchase,
+        expectedIntervalDays: customer.expectedIntervalDays,
+        overdueRatio: customer.overdueRatio,
+        segment: customer.segment,
+        favoriteProduct: customer.favoriteProduct?.name ?? null,
+        hasOffer: Boolean(selectedAction),
+        currentActionStatus: selectedAction?.status ?? null,
+        currentOfferTitle: selectedAction ? redactName(selectedAction.offer_title, customer.name) : null,
+        currentPersonalizedMessage: currentMessage,
+        currentDiscountPct: selectedAction ? Number(selectedAction.offer_discount_pct) : null,
+        canEditOffer,
+        canCreateOffer,
+        canCopyMessage,
+        availableStatuses,
+      };
+
+      selectedCustomerForOperation = {
+        usuarioKey: selectedKey,
+        assessmentId: latestAssessment?.assessment_id ?? null,
+        favoriteProductKey: latestAssessment?.favorite_product_key ?? customer.favoriteProduct?.key ?? null,
+        action: selectedAction,
+      };
+    }
+
+    const aggregateActions = (actionRows ?? []).map(({ status, ai_generated, created_at }) => ({ status, ai_generated, created_at }));
+    const context = buildAssistantContext(section, analytics, aggregateActions, selectedCustomerForModel);
+    const result = await answerAssistant({ section, messages, context });
+    let pendingOperation = null;
+    let copyText = null;
+
+    if (result.operation) {
+      const { name, arguments: args } = result.operation;
+      const selected = selectedCustomerForOperation;
+      if (!selected) return res.json({
+        answer: "Primero selecciona una tarjeta con el boton “Trabajar con Seren”. Asi podre asegurarme de operar sobre el cliente correcto.",
+        section,
+        model: env.groqModel,
+      });
+
+      if (name === "copy_offer_message") {
+        if (!selected.action?.ai_generated || !selected.action.personalized_message) {
+          return res.json({ answer: "Este cliente todavia no tiene un mensaje generado por Groq para copiar.", section, model: env.groqModel });
+        }
+        copyText = selected.action.personalized_message;
+      } else if (name === "prepare_status_change") {
+        const status = String(args?.status ?? "");
+        const current = selected.action;
+        if (!current || !(ACTION_TRANSITIONS[current.status] ?? []).includes(status)) {
+          return res.json({
+            answer: "No puedo preparar ese cambio: la accion no existe o la transicion no esta permitida desde su estado actual.",
+            section,
+            model: env.groqModel,
+          });
+        }
+        cleanExpiredAssistantOperations();
+        const proposalId = randomUUID();
+        pendingAssistantOperations.set(proposalId, {
+          userId: userKey,
+          expiresAt: Date.now() + 5 * 60_000,
+          type: "status",
+          actionId: current.action_id,
+          expectedStatus: current.status,
+          expectedUpdatedAt: current.updated_at,
+          targetStatus: status,
+        });
+        pendingOperation = {
+          proposalId,
+          type: "status",
+          title: "Confirmar cambio de estado",
+          before: STATUS_LABELS[current.status] ?? current.status,
+          after: STATUS_LABELS[status] ?? status,
+          summary: "La accion del cliente seleccionado cambiara de " + (STATUS_LABELS[current.status] ?? current.status) + " a " + (STATUS_LABELS[status] ?? status) + ".",
+          expiresInSeconds: 300,
+        };
+      } else if (name === "prepare_offer_update" || name === "prepare_offer_create") {
+        const offer = validateOfferArguments(args);
+        const current = selected.action;
+        const isCreate = name === "prepare_offer_create";
+        if (isCreate && (current || !selected.assessmentId || !selectedCustomerForModel?.canCreateOffer)) {
+          return res.json({
+            answer: "No puedo crear la propuesta ahora. Verifica que el cliente tenga una evaluacion guardada, que no exista ya una accion y que el lote actual del Agente Seren no tenga aprobaciones pendientes.",
+            section,
+            model: env.groqModel,
+          });
+        }
+        if (!isCreate && (!current?.ai_generated || !["proposed", "approved"].includes(current.status))) {
+          return res.json({
+            answer: "Esta oferta no se puede editar: debe existir una propuesta generada por Groq que aun no haya sido contactada.",
+            section,
+            model: env.groqModel,
+          });
+        }
+        cleanExpiredAssistantOperations();
+        const proposalId = randomUUID();
+        const before = isCreate ? null : {
+          offerTitle: current.offer_title,
+          personalizedMessage: current.personalized_message,
+          discountPct: Number(current.offer_discount_pct),
+        };
+        pendingAssistantOperations.set(proposalId, {
+          userId: userKey,
+          expiresAt: Date.now() + 5 * 60_000,
+          type: isCreate ? "create_offer" : "update_offer",
+          usuarioKey: selected.usuarioKey,
+          assessmentId: selected.assessmentId,
+          favoriteProductKey: selected.favoriteProductKey,
+          actionId: current?.action_id ?? null,
+          expectedStatus: current?.status ?? null,
+          expectedUpdatedAt: current?.updated_at ?? null,
+          offer,
+        });
+        pendingOperation = {
+          proposalId,
+          type: isCreate ? "create_offer" : "update_offer",
+          title: isCreate ? "Confirmar nueva propuesta" : "Confirmar edicion de oferta",
+          before,
+          after: offer,
+          summary: isCreate
+            ? "Se creara una propuesta generada por Groq. Quedara pendiente de aprobacion y aparecera en Agente Seren y Reactivaciones."
+            : "Se guardaran el nuevo titulo, mensaje y descuento. Si la propuesta ya estaba aprobada, volvera a estado propuesta para requerir una nueva aprobacion.",
+          expiresInSeconds: 300,
+        };
+      }
+    }
+
+    res.json({
+      answer: result.answer,
+      section,
+      model: env.groqModel,
+      ...(pendingOperation ? { pendingOperation } : {}),
+      ...(copyText ? { copyText } : {}),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/assistant/execute", async (req, res, next) => {
+  try {
+    cleanExpiredAssistantOperations();
+    const proposalId = String(req.body?.proposalId ?? "");
+    const pending = pendingAssistantOperations.get(proposalId);
+    if (!pending || pending.userId !== String(req.user.id)) {
+      return res.status(404).json({ message: "La propuesta ya no existe o ha caducado. Pidele a Seren que la prepare nuevamente." });
+    }
+    if (pending.expiresAt <= Date.now()) {
+      pendingAssistantOperations.delete(proposalId);
+      return res.status(410).json({ message: "La propuesta ha caducado. Pidele a Seren que la prepare nuevamente." });
+    }
+    pendingAssistantOperations.delete(proposalId);
+
+    const userId = String(req.user.id);
+    const now = new Date().toISOString();
+    let action = null;
+    let message = "";
+
+    if (pending.type === "status") {
+      const { data: current, error: readError } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .select("action_id,status,updated_at,notes,ai_generated")
+        .eq("action_id", pending.actionId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!current || !current.ai_generated) return res.status(404).json({ message: "La propuesta seleccionada ya no esta disponible." });
+      if (current.status !== pending.expectedStatus || current.updated_at !== pending.expectedUpdatedAt) {
+        return res.status(409).json({ message: "La accion cambio desde que Seren preparo la operacion. Actualiza la pagina y revisa su estado." });
+      }
+      if (!(ACTION_TRANSITIONS[current.status] ?? []).includes(pending.targetStatus)) {
+        return res.status(409).json({ message: "La transicion ya no esta permitida para el estado actual." });
+      }
+      const timestampField = {
+        approved: "approved_at",
+        contacted: "contacted_at",
+        responded: "responded_at",
+        reactivated: "reactivated_at",
+      }[pending.targetStatus];
+      const updates = {
+        status: pending.targetStatus,
+        updated_at: now,
+        notes: appendAssistantAudit(current.notes, userId, "status " + current.status + " -> " + pending.targetStatus),
+      };
+      if (timestampField) updates[timestampField] = now;
+      const { data, error } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .update(updates)
+        .eq("action_id", current.action_id)
+        .eq("status", current.status)
+        .eq("updated_at", current.updated_at)
+        .select("action_id,status,approved_at,contacted_at,responded_at,reactivated_at,updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return res.status(409).json({ message: "Otro usuario modifico esta accion primero. Actualiza la pagina y vuelve a intentarlo." });
+      action = data;
+      message = "Listo. La accion quedo " + (STATUS_LABELS[data.status] ?? data.status) + " y el cambio ya esta guardado.";
+    } else if (pending.type === "update_offer") {
+      const { data: current, error: readError } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .select("action_id,status,updated_at,notes,ai_generated")
+        .eq("action_id", pending.actionId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!current || !current.ai_generated || !["proposed", "approved"].includes(current.status)) {
+        return res.status(409).json({ message: "Esta oferta ya no puede editarse porque su estado cambio o ya fue contactada." });
+      }
+      if (current.status !== pending.expectedStatus || current.updated_at !== pending.expectedUpdatedAt) {
+        return res.status(409).json({ message: "La oferta cambio desde que Seren preparo la edicion. Actualiza la pagina y vuelve a revisar." });
+      }
+      const wasApproved = current.status === "approved";
+      const updates = {
+        offer_title: pending.offer.offerTitle,
+        personalized_message: pending.offer.personalizedMessage,
+        offer_discount_pct: pending.offer.discountPct,
+        updated_at: now,
+        notes: appendAssistantAudit(current.notes, userId, "offer edited; discount " + pending.offer.discountPct + "%; message/title updated"),
+        ...(wasApproved ? { status: "proposed", approved_at: null } : {}),
+      };
+      const { data, error } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .update(updates)
+        .eq("action_id", current.action_id)
+        .eq("status", current.status)
+        .eq("updated_at", current.updated_at)
+        .select("action_id,status,offer_title,personalized_message,offer_discount_pct,updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return res.status(409).json({ message: "Otro usuario modifico esta oferta primero. Actualiza la pagina y vuelve a intentarlo." });
+      action = data;
+      message = "Oferta actualizada y guardada. Ya aparece en Agente Seren y Reactivaciones." +
+        (wasApproved ? " Como cambio una oferta aprobada, volvio a estado propuesta y requiere nueva aprobacion." : "");
+    } else if (pending.type === "create_offer") {
+      const { data: existing, error: existingError } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .select("action_id")
+        .eq("assessment_id", pending.assessmentId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) return res.status(409).json({ message: "Ya existe una accion para esta evaluacion. Actualiza la vista antes de continuar." });
+
+      const { data: assessment, error: assessmentError } = await supabase.schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id,usuario_key,risk_level,favorite_product_key")
+        .eq("assessment_id", pending.assessmentId)
+        .maybeSingle();
+      if (assessmentError) throw assessmentError;
+      if (!assessment || String(assessment.usuario_key) !== String(pending.usuarioKey)) {
+        return res.status(409).json({ message: "La evaluacion del cliente ya no esta disponible. Ejecuta un nuevo analisis." });
+      }
+
+      const { data: latestRuns, error: latestRunError } = await supabase.schema("seren_ai")
+        .from("agent_runs")
+        .select("run_id,status")
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (latestRunError) throw latestRunError;
+      if (!latestRuns?.length || latestRuns[0].status !== "completed") {
+        return res.status(409).json({ message: "No hay una ejecucion completada para guardar esta propuesta." });
+      }
+      const { data: latestAssessments, error: latestAssessmentsError } = await supabase.schema("seren_ai")
+        .from("churn_assessments")
+        .select("assessment_id")
+        .eq("run_id", latestRuns[0].run_id)
+        .range(0, 4999);
+      if (latestAssessmentsError) throw latestAssessmentsError;
+      const { data: allActions, error: allActionsError } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .select("assessment_id,status,ai_generated,created_at")
+        .range(0, 4999);
+      if (allActionsError) throw allActionsError;
+      if (await hasPendingLatestBatch(latestAssessments, allActions ?? [])) {
+        return res.status(409).json({ message: "Primero termina de aprobar el lote activo en Agente Seren; despues podras crear una propuesta individual desde Riesgo de churn." });
+      }
+
+      const { data, error } = await supabase.schema("seren_ai")
+        .from("reactivation_actions")
+        .insert({
+          assessment_id: assessment.assessment_id,
+          usuario_key: assessment.usuario_key,
+          status: "proposed",
+          favorite_product_key: pending.favoriteProductKey ?? assessment.favorite_product_key,
+          offer_discount_pct: pending.offer.discountPct,
+          offer_title: pending.offer.offerTitle,
+          personalized_message: pending.offer.personalizedMessage,
+          ai_explanation: "Propuesta individual generada por Groq desde el asistente contextual de Seren AI.",
+          ai_generated: true,
+          created_at: now,
+          updated_at: now,
+          notes: appendAssistantAudit("", userId, "individual Groq offer created from churn page"),
+        })
+        .select("action_id,status,offer_title,personalized_message,offer_discount_pct,created_at,updated_at")
+        .single();
+      if (error) {
+        if (error.code === "23505") return res.status(409).json({ message: "Ya existe una propuesta para esta evaluacion. Actualiza la vista." });
+        throw error;
+      }
+      action = data;
+      message = "Nueva propuesta generada por Groq guardada. Aparece en Agente Seren y Reactivaciones, pendiente de aprobacion.";
+    } else {
+      return res.status(400).json({ message: "Operacion no reconocida." });
+    }
+
+    invalidateAnalyticsCache();
+    res.json({ message, action });
   } catch (error) {
     next(error);
   }
