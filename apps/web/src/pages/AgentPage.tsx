@@ -321,13 +321,20 @@ export function AgentPage() {
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[10px] font-semibold text-muted">{action ? statusLabels[action.status] ?? action.status : "Aun no guardada"}</span>
-                      {action ? (
-                        <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => window.dispatchEvent(new CustomEvent("seren:select-customer", { detail: { customerKey: item.usuarioKey, customerLabel: item.name } }))}
+                        >
+                          <Sparkles size={13} /> Trabajar con Seren
+                        </button>
+                        {action ? (
                           {action.status === "proposed" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "approved")}><Check size={13} /> Aprobar</button>}
                           {action.status === "approved" && <button className="secondary-button" onClick={() => void updateAction(action.action_id, "contacted")}><MessageCircle size={13} /> Registrar contacto</button>}
                           {action.status === "contacted" && <button className="primary-button" onClick={() => void updateAction(action.action_id, "reactivated")}><UserCheck size={13} /> Marcar reactivado</button>}
-                        </div>
-                      ) : <span className="text-[10px] text-muted">Accion no disponible</span>}
+                        ) : <span className="text-[10px] text-muted">Sin accion guardada</span>}
+                      </div>
                     </div>
                   </Panel>
                 );
